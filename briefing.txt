@@ -1,0 +1,552 @@
+BRIEFING TECNICO: PIPELINE AUTOMATIZADO DE PROCESSAMENTO DE BOLETINS PAROQUIAIS
+Ultima atualizacao: 2026-05-08 — versao 2.0 (sistema em producao)
+
+================================================================================
+
+1. VISAO GERAL E OBJETIVOS
+
+Contexto
+--------
+Pipeline automatizado que processa boletins semanais de igrejas catolicas nos
+EUA. O sistema realiza o fluxo completo desde o acesso ao website da paroquia
+ate a geracao de conteudo formatado (imagem para redes sociais + HTML para CMS)
+com revisao de qualidade por IA.
+
+Paroquia atual em producao: St. Katharine Drexel Catholic Church (skdrexel),
+Weston FL.
+
+Objetivos
+---------
+- Eliminar trabalho manual de leitura, triagem e formatacao de anuncios
+- Gerar flyers sociais (1080x1350px) consistentes com o estilo visual da paroquia
+- Produzir HTML trilingue (EN/ES/PT-BR) limpo e pronto para insercao no CMS
+- Garantir rastreabilidade, controle de qualidade e aprendizado continuo via feedback
+
+================================================================================
+
+2. ARQUITETURA REAL DO SISTEMA
+
+O sistema e composto por 5 agentes + 1 dashboard FastAPI que funciona tanto como
+interface de visualizacao quanto como orquestrador do pipeline.
+
+NOTA: O "Agente 3" (Orquestrador separado) do design original foi absorvido pelo
+dashboard (app.py), que coordena a execucao de todos os agentes via asyncio.
+
+DIAGRAMA DO PIPELINE:
+
+  [Dashboard / FastAPI]  -->  Agente 1 (Scraper)
+         |                          | PDF
+         |                          v
+         |               Agente 2 (Reader/Claude)
+         |                          | announcements.json
+         |                     [--paralelo asyncio--]
+         |                     v                   v
+         |          Agente 4A (Imagens)   Agente 4B (HTML)
+         |          [Claude+Gemini]       [Claude API]
+         |                     [-------------------]
+         |                          |
+         |               Agente 5 (Reviewer/Claude)
+         |                          | review_report.json
+         +---------------------------+
+                   Dashboard (visualizacao + edicao manual)
+
+
+RESUMO DOS AGENTES:
+
+  agent1_scraper.py   | Download do PDF do boletim         | httpx, Playwright (fallback)
+  agent2_reader.py    | Extracao dos anuncios do PDF        | Claude API (Vision)
+  agent4a_image.py    | Geracao de flyers para redes sociais| Claude (localizacao) + Gemini (geracao)
+  agent4b_html.py     | Geracao de HTML trilingue para CMS  | Claude API
+  agent5_reviewer.py  | Revisao de qualidade imagem + HTML  | Claude API (Vision)
+  dashboard/app.py    | Orquestracao + Interface web        | FastAPI, todos os agentes acima
+
+================================================================================
+
+3. FLUXO DETALHADO DE DADOS
+
+------------------------------------------------------------------------
+PASSO 1 — AGENTE 1: SCRAPER (agent1_scraper.py)
+------------------------------------------------------------------------
+
+Entrada: URL da pagina de boletins da paroquia (do config/parishes/skdrexel.yaml)
+
+Logica:
+  1. Tenta endpoints conhecidos com httpx (sem browser):
+     bulletin_archives.php?year=YYYY e variacoes
+  2. Extrai links PDF via regex: href=["']([^"']+\.pdf)["']
+  3. Ordena por nome de arquivo (padrao YYYYMMDD.pdf) e pega o mais recente
+  4. Fallback: aciona Playwright (Chromium headless) para paginas com JS
+  5. Download do PDF com headers realistas (User-Agent Chrome)
+
+Saida: output/skdrexel/YYYY-MM-DD/YYYYMMDD.pdf
+
+Estrutura de pasta: usa a data extraida do nome do arquivo (padrao YYYYMMDD.pdf),
+criando automaticamente output/{parish_id}/{YYYY-MM-DD}/.
+
+------------------------------------------------------------------------
+PASSO 2 — AGENTE 2: READER (agent2_reader.py)
+------------------------------------------------------------------------
+
+Entrada: Caminho do PDF + parish_id
+
+Logica:
+  1. Converte PAGINAS 7, 8, 9 E 10 do PDF em imagens PNG a 150 DPI via pdf2image
+  2. Salva as paginas em output/{parish}/date/pages/page_07.png ... page_10.png
+  3. Carrega imagens de exemplo de referencia de
+     config/parishes/{parish_id}/examples/ (few-shot)
+  4. Monta mensagem multimodal para Claude com:
+     - Exemplos de referencia (imagens de boletins anteriores como few-shot)
+     - Data de hoje (para filtrar eventos passados)
+     - As 4 paginas do boletim atual
+  5. Envia para claude-opus-4-5 com system prompt especializado
+  6. Parseia JSON retornado e salva em announcements.json
+
+System prompt: src/prompts/system_prompt.txt
+  Define criterios exatos do que e e nao e anuncio.
+
+Saida JSON por anuncio:
+  {
+    "id": "1",
+    "title": "Santo Rosario en el Jardin de la Virgen",
+    "body": "texto completo preservando quebras de linha",
+    "category": "events | ministries | formation | fundraising | community | other",
+    "event_date": "2026-05-13",
+    "location": "Jardin de la Virgen",
+    "order": 1,
+    "image_prompt": "prompt descritivo para geracao de imagem"
+  }
+
+Saida: output/{parish}/date/announcements.json
+
+------------------------------------------------------------------------
+PASSO 3 — AGENTE 4A: GERADOR DE IMAGENS (agent4a_image.py)
+------------------------------------------------------------------------
+
+Roda em paralelo com o Agente 4B via asyncio.gather.
+
+Entrada: announcements.json + paginas PNG em pages/
+
+Logica em 4 etapas:
+
+  ETAPA A — LOCALIZACAO VIA CLAUDE:
+  - Envia as 4 paginas do boletim para claude-opus-4-5 com lista dos anuncios
+  - Claude retorna bounding boxes por porcentagem:
+    {id, page, top, left, bottom, right}
+  - Regras explicitas: excluir header/footer da pagina, nunca cruzar espacos
+    em branco entre anuncios
+  - Cache salvo em locations.json para reutilizacao em edicoes individuais
+
+  ETAPA B — CROP DO ANUNCIO:
+  - Recorta a regiao exata do anuncio da pagina PNG com padding de 12px
+  - Resultado: imagem isolada apenas daquele anuncio
+
+  ETAPA C — GERACAO VIA GEMINI:
+  - Prompt construido com: titulo, data, local, emails, telefones, URLs
+    extraidos do corpo
+  - Aplica feedback acumulado de
+    config/parishes/{parish_id}/agent_feedback/image_feedback.md
+  - Envia o crop isolado + prompt para gemini-3.1-flash-image-preview
+  - Modelo Gemini redesenha o anuncio como flyer profissional vertical
+    (estilo Instagram)
+  - Fallback: se Gemini falhar -> usa placeholder.png da pasta support/,
+    ou o proprio crop redimensionado
+
+  ETAPA D — COMPOSICAO FINAL:
+  - Redimensiona para 1080x1350px (cover fit)
+  - Sobrepo logo da paroquia na parte inferior central
+    (config/parishes/{parish_id}/logo.png)
+  - Salva em output/{parish}/date/images/announcement_NN.png
+
+Saida: output/{parish}/date/images/announcement_01.png ... announcement_NN.png
+
+------------------------------------------------------------------------
+PASSO 4 — AGENTE 4B: GERADOR DE HTML (agent4b_html.py)
+------------------------------------------------------------------------
+
+Roda em paralelo com o Agente 4A via asyncio.gather.
+
+Entrada: announcements.json + parish_id
+
+Logica:
+  1. Detecta QR codes nas paginas PNG via pyzbar -> extrai URLs
+  2. Carrega system prompt de src/prompts/html_system_prompt.txt, injetando:
+     - Template HTML da paroquia
+       (config/parishes/{parish_id}/html_template.txt)
+     - Dominio interno da paroquia (skdrexel.org) para links internos
+       sem target="_blank"
+     - Feedback acumulado de html_feedback.md
+  3. Para cada anuncio, envia um user message com:
+     titulo, categoria, data, local e corpo
+  4. Claude gera HTML trilingue (EN -> ES -> PT-BR) separado por divisor
+  5. Estrutura HTML obrigatoria em 3 blocos por idioma:
+     - Bloco 1: <h2 align="center"> com data/hora formatada
+     - Bloco 2: <p>, <h4>, <ul> com conteudo descritivo
+     - Bloco 3: <blockquote> com contato, local, links
+
+Saida: output/{parish}/date/html/announcement_NN.html (um arquivo por anuncio)
+
+------------------------------------------------------------------------
+PASSO 5 — AGENTE 5: REVISOR (agent5_reviewer.py)
+------------------------------------------------------------------------
+
+Entrada: announcements.json + images/ + html/ + pages/ (para crop de referencia)
+
+Logica:
+  1. Para cada anuncio, envia ao claude-opus-4-5:
+     - Imagem fonte (crop original do boletim)
+     - Imagem gerada (flyer)
+     - HTML gerado
+     - Dados do anuncio (titulo, data, local, categoria)
+  2. Claude verifica:
+     IMAGEM: contaminacao cruzada, estrutura basica (foto, titulo, data, logo,
+             local, contato), erros ortograficos, QR codes
+     HTML:   estrutura nos 3 idiomas, erros ortograficos nao marcados,
+             termos "QR" como texto, HTML bem formado
+     TAMANHO: verifica programaticamente se a imagem e 1080x1350px
+  3. Retorna JSON estruturado:
+     {image: {approved, issues}, html: {approved, spelling_errors, issues},
+      overall_approved}
+  4. AUTO_REGEN = False — revisor apenas reporta, nao regenera automaticamente
+     (edicao manual pelo dashboard)
+  5. Salva review_report.json e approved.json
+
+Sistema de correcao sugerida:
+  - Endpoint /api/suggest-corrections envia erros ao CORRECTION_SYSTEM_PROMPT
+  - Claude retorna lista de correcoes exatas: {original, suggestion, context}
+    para aplicacao cirurgica no HTML
+
+------------------------------------------------------------------------
+PASSO 6 — DASHBOARD (src/dashboard/app.py)
+------------------------------------------------------------------------
+
+Stack: FastAPI + HTML/JS vanilla + Tailwind CSS (via CDN) | Porta: localhost:8502
+
+Modos de execucao do workflow:
+
+  complete  ->  Agente 1 -> 2 -> 4A+4B (paralelo) -> 5
+  images    ->  Usa run mais recente -> apenas regenera imagens (4A)
+  content   ->  Usa run mais recente -> apenas regenera HTML (4B)
+
+Endpoints principais:
+
+  GET  /api/runs                             Lista todos os runs disponiveis
+  GET  /api/run/{parish}/{date}              Retorna anuncios com imagem, HTML,
+                                             review e ratings
+  GET  /api/image/{parish}/{date}/{id}       Serve imagem PNG como FileResponse
+  POST /api/workflow/start                   Inicia workflow em background
+                                             (retorna job_id)
+  GET  /api/workflow/status/{job_id}         Polling do status do workflow
+  POST /api/regen/image/{parish}/{date}/{id} Regenera imagem de um anuncio
+  POST /api/regen/content/{parish}/{date}/{id} Regenera HTML de um anuncio
+  POST /api/edit/html/{parish}/{date}/{id}   Salva edicao manual do HTML
+  POST /api/review/{parish}/{date}/{id}      Aciona revisao individual
+  POST /api/suggest-corrections/...         Sugere correcoes cirurgicas de HTML
+  POST /api/feedback/{parish}/{date}/{id}    Salva rating + instrucao de feedback
+  POST /api/finalize/{parish}/{date}         Gera feedback consolidado via IA
+  POST /api/rate/{parish}/{date}/{id}        Salva avaliacao 1-5 estrelas
+  GET  /api/parishes                         Lista paroquias configuradas
+  GET  /api/css/{parish_id}                  Retorna CSS da paroquia
+
+Funcionalidades do frontend:
+  - Cards por anuncio: imagem gerada + HTML renderizado lado a lado
+  - Status visual: aprovado / precisa revisao / pendente (com icones e cores)
+  - Botao download da imagem (PNG)
+  - Botao copiar HTML (clipboard API)
+  - Editor inline de HTML com salvar
+  - Regenerar imagem ou HTML individualmente (com instrucao pontual opcional)
+  - Sistema de avaliacao 1-5 estrelas por imagem e HTML
+  - Botao "Finalizar run" -> gera feedback IA consolidado e persiste em
+    agent_feedback/
+
+================================================================================
+
+4. SISTEMA DE FEEDBACK E APRENDIZADO CONTINUO
+
+O pipeline tem memoria entre execucoes via arquivos Markdown em:
+  config/parishes/{parish_id}/agent_feedback/
+
+image_feedback.md
+  Instrucoes acumuladas para o Agente 4A (Gemini). Geradas de duas formas:
+  1. Manual: usuario escreve instrucao ao dar feedback via dashboard
+  2. Automatico: ao "Finalizar run", Claude analisa ratings e problemas
+     reportados e gera 3-6 instrucoes especificas
+  O agente le esse arquivo no inicio de cada run e injeta as instrucoes
+  no prompt do Gemini.
+
+html_feedback.md
+  Mesma estrutura, para o Agente 4B (Claude HTML).
+
+Fluxo de aprendizado:
+
+  Run N -> Usuario avalia (1-5 estrelas) + aponta problemas
+        -> "Finalizar run" -> Claude consolida aprendizados
+        -> Salva em image_feedback.md / html_feedback.md
+        -> Run N+1 usa esses feedbacks automaticamente
+
+================================================================================
+
+5. ESTRUTURA DE ARQUIVOS DO PROJETO
+
+  Project Zero - Claude/
+  |
+  +-- config/
+  |   +-- parishes/
+  |       +-- skdrexel.yaml              Config da paroquia (URL, dominio interno)
+  |       +-- skdrexel/
+  |           +-- html_template.txt      Template HTML de referencia para o CMS
+  |           +-- newspage_rules.css     CSS do CMS (para preview fiel no dashboard)
+  |           +-- examples/              Screenshots de boletins anteriores
+  |           |                          (few-shot para Agente 2)
+  |           +-- examples 2/            Pares antes/depois para referencia visual
+  |           +-- support/
+  |           |   +-- logo-skdrexel.png  Logo sobreposto nas imagens geradas
+  |           |   +-- placeholder.png    Imagem fallback quando Gemini falha
+  |           +-- agent_feedback/
+  |               +-- image_feedback.md  Feedback acumulado para Agente 4A
+  |               +-- html_feedback.md   Feedback acumulado para Agente 4B
+  |
+  +-- src/
+  |   +-- agents/
+  |   |   +-- agent1_scraper.py
+  |   |   +-- agent2_reader.py
+  |   |   +-- agent4a_image.py
+  |   |   +-- agent4b_html.py
+  |   |   +-- agent5_reviewer.py
+  |   +-- dashboard/
+  |   |   +-- app.py                     FastAPI: orquestrador + interface web
+  |   |   +-- static/
+  |   |       +-- index.html             Frontend completo (HTML/JS vanilla)
+  |   |       +-- *.png                  Icones da interface
+  |   +-- prompts/
+  |       +-- system_prompt.txt          Prompt Agente 2 (extracao de anuncios)
+  |       +-- html_system_prompt.txt     Prompt Agente 4B (geracao HTML trilingue)
+  |
+  +-- output/
+  |   +-- skdrexel/
+  |       +-- YYYY-MM-DD/
+  |           +-- YYYYMMDD.pdf           PDF original baixado
+  |           +-- announcements.json     Anuncios extraidos pelo Agente 2
+  |           +-- locations.json         Bounding boxes (cache do Agente 4A)
+  |           +-- review_report.json     Resultado da revisao por anuncio
+  |           +-- approved.json          Lista de IDs aprovados
+  |           +-- ratings.json           Avaliacoes 1-5 estrelas por anuncio
+  |           +-- pages/                 PNG das paginas 7-10 do boletim
+  |           +-- images/                Flyers gerados (1080x1350px)
+  |           +-- html/                  HTMLs trilingues gerados
+  |
+  +-- requirements.txt
+  +-- .env                               ANTHROPIC_API_KEY, GOOGLE_API_KEY
+  +-- .env.example
+
+================================================================================
+
+6. CONFIGURACAO DE PAROQUIA (config/parishes/skdrexel.yaml)
+
+  parish:
+    id: "skdrexel"
+    name: "St. Katharine Drexel Catholic Church"
+    bulletin_archive_url: "https://www.skdrexel.org/CatholicChurch.php?pg=Bulletin+Archive"
+    internal_domain: "skdrexel.org"
+
+  scraper:
+    wait_for_js: true
+    timeout_seconds: 30
+    pdf_link_pattern: "(?i)(bulletin|boletim).*\\.pdf$"
+
+  image_generator:
+    api: "openai_dalle3"     # legado — Gemini usado na pratica
+    style_instructions: "Watercolor style, warm and welcoming..."
+    size: "1024x1024"
+    max_images_per_run: 10
+
+================================================================================
+
+7. VARIAVEIS DE AMBIENTE
+
+  ANTHROPIC_API_KEY=sk-ant-...   Claude API (Agentes 2, 4B, 5 e localizacao do 4A)
+  GOOGLE_API_KEY=...             Gemini API (geracao de imagens no Agente 4A)
+
+================================================================================
+
+8. STACK DE TECNOLOGIAS EM USO
+
+  LLM principal      | anthropic SDK — claude-opus-4-5         | Agentes 2, 4B, 5 (e localizacao no 4A)
+  Geracao de imagem  | Google Gemini gemini-3.1-flash-image-preview | Agente 4A
+  Web scraping       | httpx + playwright (fallback)            | Agente 1
+  PDF -> imagem      | pdf2image (wrapper do poppler)           | Agente 2
+  Leitura de QR      | pyzbar                                   | Agente 4B
+  Manipulacao imagem | Pillow                                   | Crop, resize, composicao de logo
+  Backend API        | FastAPI + uvicorn                        | Dashboard (porta 8502)
+  Frontend           | HTML/JS vanilla + Tailwind CSS (CDN)     | Interface do dashboard
+  Env vars           | python-dotenv                            | Carregamento de .env
+  Config             | PyYAML                                   | Leitura de skdrexel.yaml
+
+================================================================================
+
+9. ESTIMATIVA DE TOKENS E CUSTOS POR EXECUCAO
+
+------------------------------------------------------------------------
+AGENTE 2 — EXTRACAO DE ANUNCIOS (Claude Opus 4.5)
+------------------------------------------------------------------------
+
+  System prompt                    ~400 palavras         ~600 tokens input
+  Imagens de exemplo (few-shot)    ~23 screenshots PNG   ~8.000 tokens input (vision)
+  4 paginas do boletim (PNG 150dpi)~200-400KB cada       ~5.000-8.000 tokens input
+  Instrucao de data + contexto     ~50 tokens            ~50 tokens input
+  -----------------------------------------------------------------
+  Total input                                            ~14.000-17.000 tokens
+  Resposta JSON (9 anuncios)       ~1.500-2.500 palavras ~2.000-3.000 tokens output
+  Custo estimado (claude-opus-4-5: $15/$75 por 1M):     ~$0.21-$0.26
+
+------------------------------------------------------------------------
+AGENTE 4A — LOCALIZACAO (Claude Opus 4.5)
+------------------------------------------------------------------------
+
+  4 paginas PNG + lista de anuncios   Imagens + texto     ~5.500-8.000 tokens input
+  Resposta JSON de bounding boxes     9 itens             ~300-500 tokens output
+  Custo estimado:                                         ~$0.08-$0.12
+
+------------------------------------------------------------------------
+AGENTE 4A — GERACAO DE IMAGENS (Gemini Flash Image Preview)
+------------------------------------------------------------------------
+
+  Geracao por imagem    crop PNG + prompt ~200 tokens     ~$0.005-$0.01/imagem
+  9 imagens no run                                        ~$0.05-$0.09
+
+------------------------------------------------------------------------
+AGENTE 4B — GERACAO HTML (Claude Opus 4.5)
+------------------------------------------------------------------------
+
+  System prompt (com template)  ~800-1.200 palavras + template  ~1.500 tokens input
+  Dados de cada anuncio         ~100-300 tokens                 ~200 tokens input/anuncio
+  HTML trilingue gerado         ~800-1.500 tokens/anuncio       ~1.000 tokens output
+  Por anuncio:                                                   ~$0.025-$0.045
+  9 anuncios:                                                    ~$0.22-$0.40
+
+------------------------------------------------------------------------
+AGENTE 5 — REVISAO (Claude Opus 4.5)
+------------------------------------------------------------------------
+
+  System prompt de revisao      ~600 tokens                     ~600 tokens input
+  Por anuncio: crop fonte +
+    imagem gerada + HTML + dados Imagens ~3.000-5.000 tokens
+                                  + HTML ~1.000                 ~5.000-7.000 tokens input
+  Resposta JSON de revisao      ~200-400 tokens                 ~300 tokens output
+  Por anuncio:                                                   ~$0.08-$0.11
+  9 anuncios:                                                    ~$0.72-$0.99
+
+------------------------------------------------------------------------
+RESUMO TOTAL POR EXECUCAO COMPLETA (9 ANUNCIOS)
+------------------------------------------------------------------------
+
+  Agente 2 (extracao)      Claude Opus 4.5      ~$0.21-$0.26
+  Agente 4A localizacao    Claude Opus 4.5      ~$0.08-$0.12
+  Agente 4A geracao        Gemini Flash Image   ~$0.05-$0.09
+  Agente 4B HTML           Claude Opus 4.5      ~$0.22-$0.40
+  Agente 5 revisao         Claude Opus 4.5      ~$0.72-$0.99
+  ---------------------------------------------------------------
+  TOTAL POR RUN:                                ~$1.28-$1.86
+  MENSAL (4 runs/paroquia):                     ~$5.12-$7.44
+
+  Maior custo: Agente 5 (revisao), pois envia 2 imagens por anuncio ao
+  Claude Vision.
+
+  Potencial de otimizacao: migrar o Agente 2 para claude-sonnet-4-6 (80%
+  mais barato que Opus) poderia reduzir o custo total em ~15%.
+
+================================================================================
+
+10. DECISOES ARQUITETURAIS TOMADAS
+
+  Gerador de imagens    Gemini gemini-3.1-flash-image-preview
+                        Suporte a image-in/image-out; redesenha o crop
+                        original preservando elementos visuais
+
+  Envio do PDF          Conversao para PNG (paginas especificas)
+                        Controle exato das paginas; Claude Vision lida
+                        melhor com imagens isoladas que PDF completo
+
+  Orquestrador          Absorvido pelo app.py (FastAPI)
+                        Elimina um processo separado; workflow controlado
+                        via async jobs com polling
+
+  Dashboard             FastAPI + HTML/JS vanilla
+                        Ja implementado; sem dependencia de build frontend
+
+  Feedback persistido   Arquivos Markdown por paroquia
+                        Simples, legivel por humanos, editavel manualmente
+
+  AUTO_REGEN            Desativado (False) no Agente 5
+                        Edicao humana via dashboard e mais precisa que
+                        regeneracao automatica cega
+
+  Bounding box cacheado locations.json por run
+                        Evita chamada extra ao Claude a cada regeneracao
+                        individual de imagem
+
+  Idiomas no HTML       Sempre EN + ES + PT-BR
+                        Paroquia bilingue (ingles/espanhol) com demanda
+                        de PT-BR para comunidade brasileira
+
+================================================================================
+
+11. PONTOS DE ATENCAO ATUAIS
+
+11.1 Paginas Fixas do Boletim
+  O Agente 2 processa fixamente as paginas 7, 8, 9 e 10
+  (BULLETIN_PAGES = [7, 8, 9, 10]). Se o layout do boletim mudar (ex:
+  anuncios em outras paginas), essa constante precisa ser ajustada manualmente.
+
+11.2 Modelo Gemini de Imagem
+  O modelo gemini-3.1-flash-image-preview e experimental/preview. Mudancas
+  de API ou descontinuacao podem exigir adaptacao. O nome do modelo deve ser
+  monitorado nas notas de lancamento do Google.
+
+11.3 Erros Ortograficos no HTML
+  O revisor identifica erros ortograficos mas nao corrige automaticamente.
+  O endpoint /api/suggest-corrections fornece correcoes pontuais que precisam
+  ser aplicadas manualmente no editor do dashboard. Fluxo ainda nao totalmente
+  automatizado.
+
+11.4 Dependencia de requirements.txt Desatualizado
+  O requirements.txt ainda lista openai>=1.35.0 e streamlit>=1.35.0, mas
+  nenhum dos dois e mais utilizado na implementacao atual (Gemini substituiu
+  DALL-E; FastAPI substituiu Streamlit). Limpeza recomendada.
+
+11.5 Escalabilidade Multi-Paroquia
+  O sistema foi projetado para multi-tenant mas so foi validado com skdrexel.
+  A segunda paroquia exigira: novo YAML, novo html_template.txt, novas imagens
+  de exemplo e testes dos prompts.
+
+================================================================================
+
+12. COMO EXECUTAR
+
+Dashboard (modo recomendado):
+
+  cd "Project Zero - Claude"
+  source .venv/bin/activate
+  python src/dashboard/app.py
+  # Abre automaticamente http://localhost:8502
+
+Agentes individualmente (modo desenvolvimento/debug):
+
+  # Agente 1 — baixar PDF
+  python src/agents/agent1_scraper.py
+
+  # Agente 2 — extrair anuncios (requer PDF ja baixado)
+  python src/agents/agent2_reader.py
+
+  # Agente 4A — gerar imagens (requer announcements.json + pages/)
+  python src/agents/agent4a_image.py
+
+  # Agente 4B — gerar HTML (requer announcements.json)
+  python src/agents/agent4b_html.py
+
+  # Agente 5 — revisar (requer images/ + html/)
+  python src/agents/agent5_reviewer.py
+
+  Cada agente tem seu bloco "if __name__ == '__main__'" com output_dir e
+  parish_id definidos para execucao local — ajustar conforme necessario.
+
+================================================================================

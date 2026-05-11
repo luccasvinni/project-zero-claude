@@ -1,0 +1,20 @@
+<h2>dia da semana, mês dia (Sunday, May 17<sup>th</sup>) - hora (example: 00:00am/pm)</h2>
+<p>descrição</p>
+<ul>
+	<li>item de lista</li>
+</ul>
+<p>
+	<a href="#" target="_blank">link example</a>
+</p>
+<p>
+	<a href="#" target="_blank" rel="noopener"> Exemplo de botão </a>
+</p>
+<blockquote>
+	<p>endereço completo</p>
+	<p>
+		<a href="tel:000-000-0000" target="_blank" rel="noopener">(000) 000-0000</a> | <a href="mailto:email@email.com">email@email.com</a>
+	</p>
+	<p>
+		CTA e link para inscrição, registro ou coisa parecida.
+	</p>
+</blockquote>
