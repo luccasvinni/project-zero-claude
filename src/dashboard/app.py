@@ -1,6 +1,8 @@
 import asyncio
+import io
 import json
 import os
+import shutil
 import sys
 import uuid
 import webbrowser
@@ -9,7 +11,7 @@ from pathlib import Path
 import anthropic
 import uvicorn
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from dotenv import load_dotenv
@@ -45,10 +47,10 @@ async def _run_image_edit(job_id: str, parish_id: str, date: str, ann_id: str, p
         sys.path.insert(0, str(Path(__file__).parent.parent / "agents"))
         from agent4a_image import (
             locate_announcements, crop_announcement,
-            generate_image_with_gemini, resize_to_canvas, OUTPUT_SIZE,
+            generate_image_with_openai, resize_to_canvas, OUTPUT_SIZE,
             load_parish_logo, composite_logo,
         )
-        import google.genai as genai_mod
+        from openai import OpenAI as _OpenAI
 
         run_dir = OUTPUT_BASE / parish_id / date
         announcements = json.loads((run_dir / "announcements.json").read_text())
@@ -57,7 +59,7 @@ async def _run_image_edit(job_id: str, parish_id: str, date: str, ann_id: str, p
             raise ValueError("Anúncio não encontrado")
 
         ann["_edit_request"] = prompt
-        gemini_client = genai_mod.Client(api_key=os.environ["GOOGLE_API_KEY"])
+        openai_client = _OpenAI(api_key=os.environ["OPENAI_API_KEY"])
         pages_dir = run_dir / "pages"
 
         # Step 1 — locate (use cache if available)
@@ -77,7 +79,7 @@ async def _run_image_edit(job_id: str, parish_id: str, date: str, ann_id: str, p
         # Step 2 — generate
         step("generating", "Gerando nova imagem com IA...")
         crop = crop_announcement(pages_dir, location)
-        generated = generate_image_with_gemini(gemini_client, crop, ann)
+        generated = generate_image_with_openai(openai_client, crop, ann)
         if generated is None:
             generated = crop
 
@@ -110,10 +112,10 @@ async def _run_regen_image(job_id: str, parish_id: str, date: str, ann_id: str, 
         sys.path.insert(0, str(Path(__file__).parent.parent / "agents"))
         from agent4a_image import (
             locate_announcements, crop_announcement,
-            generate_image_with_gemini, resize_to_canvas, OUTPUT_SIZE,
+            generate_image_with_openai, resize_to_canvas, OUTPUT_SIZE,
             load_agent_feedback, load_parish_logo, composite_logo,
         )
-        import google.genai as genai_mod
+        from openai import OpenAI as _OpenAI
 
         run_dir = OUTPUT_BASE / parish_id / date
         announcements = json.loads((run_dir / "announcements.json").read_text())
@@ -128,7 +130,7 @@ async def _run_regen_image(job_id: str, parish_id: str, date: str, ann_id: str, 
         if instruction:
             ann["_edit_request"] = instruction
 
-        gemini_client = genai_mod.Client(api_key=os.environ["GOOGLE_API_KEY"])
+        openai_client = _OpenAI(api_key=os.environ["OPENAI_API_KEY"])
         pages_dir = run_dir / "pages"
 
         step("locating", "Localizando anúncio na página...")
@@ -146,7 +148,7 @@ async def _run_regen_image(job_id: str, parish_id: str, date: str, ann_id: str, 
 
         step("generating", "Gerando nova imagem com IA...")
         crop = crop_announcement(pages_dir, location)
-        generated = generate_image_with_gemini(gemini_client, crop, ann)
+        generated = generate_image_with_openai(openai_client, crop, ann)
         if generated is None:
             generated = crop
 
@@ -156,18 +158,23 @@ async def _run_regen_image(job_id: str, parish_id: str, date: str, ann_id: str, 
         if parish_logo:
             final_img = composite_logo(final_img, parish_logo)
         out_path = run_dir / "images" / f"announcement_{ann_id.zfill(2)}.png"
+        backup_path = run_dir / "images" / f"announcement_{ann_id.zfill(2)}_backup.png"
+        had_existing = out_path.exists()
+        if had_existing:
+            shutil.copy2(str(out_path), str(backup_path))
         final_img.save(str(out_path), "PNG")
 
         job["status"] = "done"
         job["step"] = "done"
         job["detail"] = "Imagem regenerada com sucesso."
+        job["has_backup"] = had_existing
 
     except Exception as exc:
         job["status"] = "error"
         job["detail"] = str(exc)
 
 
-async def _run_regen_content(job_id: str, parish_id: str, date: str, ann_id: str, instruction: str = ""):
+async def _run_regen_content(job_id: str, parish_id: str, date: str, ann_id: str, instruction: str = "", use_crop: bool = False):
     job = _regen_jobs[job_id]
 
     def step(name: str, detail: str):
@@ -187,22 +194,41 @@ async def _run_regen_content(job_id: str, parish_id: str, date: str, ann_id: str
         step("generating", "Gerando conteúdo HTML...")
         client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
         system_prompt = _a4b.load_system_prompt(parish_id)
-        # Pontual instruction appended to system prompt for this call only
         if instruction:
             system_prompt += f"\n\n---\n\nINSTRUÇÃO PONTUAL PARA ESTE ANÚNCIO (aplicar apenas nesta geração):\n- {instruction}"
         qr_urls = _a4b.detect_qr_codes(run_dir / "pages")
-        html = await _a4b.generate_html_for_announcement(client, ann, system_prompt, qr_urls)
+
+        crop_image = None
+        if use_crop:
+            try:
+                from agent4a_image import crop_announcement as _crop_ann
+                locations_path = run_dir / "locations.json"
+                if locations_path.exists():
+                    locations = json.loads(locations_path.read_text())
+                    location = locations.get(ann_id)
+                    if location:
+                        crop_image = _crop_ann(run_dir / "pages", location)
+            except Exception as _e:
+                print(f"  Warning: could not load crop image for HTML agent: {_e}")
+
+        html = await _a4b.generate_html_for_announcement(client, ann, system_prompt, qr_urls, crop_image=crop_image)
 
         step("saving", "Salvando conteúdo...")
         html_dir = run_dir / "html"
         html_dir.mkdir(exist_ok=True)
         filename = f"announcement_{ann_id.zfill(2)}.html"
-        (html_dir / filename).write_text(html, encoding="utf-8")
+        html_path = html_dir / filename
+        had_existing = html_path.exists()
+        if had_existing and use_crop:
+            backup_path = html_dir / f"announcement_{ann_id.zfill(2)}_backup.html"
+            shutil.copy2(str(html_path), str(backup_path))
+        html_path.write_text(html, encoding="utf-8")
 
         job["status"] = "done"
         job["step"] = "done"
         job["detail"] = "Conteúdo regenerado com sucesso."
         job["html"] = html
+        job["has_html_backup"] = had_existing and use_crop
 
     except Exception as exc:
         job["status"] = "error"
@@ -227,7 +253,7 @@ def _run_in_thread(coro_factory):
         loop.close()
 
 
-async def _run_workflow(job_id: str, parish_id: str, mode: str = "complete", reader_instruction: str = ""):
+async def _run_workflow(job_id: str, parish_id: str, mode: str = "complete", reader_instruction: str = "", bulletin_url: str = ""):
     """mode: 'complete' | 'images' | 'content'"""
     job = _workflow_jobs[job_id]
 
@@ -243,14 +269,26 @@ async def _run_workflow(job_id: str, parish_id: str, mode: str = "complete", rea
             # Step 1 — scraper
             step("scraper", "Baixando boletim...")
             config = _load_parish_yaml(parish_id)
-            page_url = config.get("parish", {}).get("bulletin_archive_url", "")
-            if not page_url:
-                raise ValueError(f"bulletin_archive_url não configurado para {parish_id}")
+            direct_pdf = config.get("scraper", {}).get("direct_pdf", False)
 
             import agent1_scraper as _a1
-            pdf_path = await asyncio.to_thread(
-                _run_in_thread, lambda: _a1.run(page_url=page_url, parish_id=_pid)
-            )
+
+            if direct_pdf:
+                if not bulletin_url:
+                    raise ValueError("Esta paróquia requer o link direto do boletim PDF.")
+                _burl = bulletin_url
+                pdf_path = await asyncio.to_thread(
+                    _run_in_thread, lambda: _a1.download_pdf(_burl, _pid)
+                )
+            else:
+                page_url = config.get("parish", {}).get("bulletin_archive_url", "")
+                if not page_url:
+                    raise ValueError(f"bulletin_archive_url não configurado para {parish_id}")
+                _purl = page_url
+                pdf_path = await asyncio.to_thread(
+                    _run_in_thread, lambda: _a1.run(page_url=_purl, parish_id=_pid)
+                )
+
             if not pdf_path:
                 raise RuntimeError("Falha ao baixar o boletim PDF")
             output_dir = pdf_path.parent
@@ -393,12 +431,17 @@ def get_run(parish_id: str, date: str):
     if (run_dir / "ratings.json").exists():
         ratings = json.loads((run_dir / "ratings.json").read_text())
 
+    locations = {}
+    if (run_dir / "locations.json").exists():
+        locations = json.loads((run_dir / "locations.json").read_text())
+
     for ann in announcements:
         ann_id = str(ann.get("id"))
         img_path = run_dir / "images" / f"announcement_{ann_id.zfill(2)}.png"
         html_path = run_dir / "html" / f"announcement_{ann_id.zfill(2)}.html"
         ann["has_image"] = img_path.exists()
         ann["has_html"] = html_path.exists()
+        ann["has_source"] = ann_id in locations
         ann["html_content"] = html_path.read_text(encoding="utf-8") if html_path.exists() else ""
         ann["review"] = report.get(ann_id, {})
         ann["status"] = report.get(ann_id, {}).get("status", "pending")
@@ -414,6 +457,157 @@ def get_image(parish_id: str, date: str, ann_id: str):
     if not img_path.exists():
         raise HTTPException(status_code=404, detail="Image not found")
     return FileResponse(str(img_path), media_type="image/png")
+
+
+@app.get("/api/image-backup/{parish_id}/{date}/{ann_id}")
+def get_image_backup(parish_id: str, date: str, ann_id: str):
+    run_dir = get_run_dir(parish_id, date)
+    backup_path = run_dir / "images" / f"announcement_{ann_id.zfill(2)}_backup.png"
+    if not backup_path.exists():
+        raise HTTPException(status_code=404, detail="No backup")
+    return FileResponse(str(backup_path), media_type="image/png")
+
+
+@app.post("/api/restore-image/{parish_id}/{date}/{ann_id}")
+def restore_image(parish_id: str, date: str, ann_id: str):
+    run_dir = get_run_dir(parish_id, date)
+    backup_path = run_dir / "images" / f"announcement_{ann_id.zfill(2)}_backup.png"
+    out_path = run_dir / "images" / f"announcement_{ann_id.zfill(2)}.png"
+    if not backup_path.exists():
+        raise HTTPException(status_code=404, detail="No backup to restore")
+    shutil.copy2(str(backup_path), str(out_path))
+    backup_path.unlink()
+    return {"ok": True}
+
+
+@app.delete("/api/image-backup/{parish_id}/{date}/{ann_id}")
+def delete_image_backup(parish_id: str, date: str, ann_id: str):
+    run_dir = get_run_dir(parish_id, date)
+    backup_path = run_dir / "images" / f"announcement_{ann_id.zfill(2)}_backup.png"
+    if backup_path.exists():
+        backup_path.unlink()
+    return {"ok": True}
+
+
+@app.get("/api/html-backup/{parish_id}/{date}/{ann_id}")
+def get_html_backup(parish_id: str, date: str, ann_id: str):
+    run_dir = get_run_dir(parish_id, date)
+    backup_path = run_dir / "html" / f"announcement_{ann_id.zfill(2)}_backup.html"
+    if not backup_path.exists():
+        raise HTTPException(status_code=404, detail="No HTML backup")
+    return {"html": backup_path.read_text(encoding="utf-8")}
+
+
+@app.post("/api/restore-html/{parish_id}/{date}/{ann_id}")
+def restore_html(parish_id: str, date: str, ann_id: str):
+    run_dir = get_run_dir(parish_id, date)
+    backup_path = run_dir / "html" / f"announcement_{ann_id.zfill(2)}_backup.html"
+    out_path = run_dir / "html" / f"announcement_{ann_id.zfill(2)}.html"
+    if not backup_path.exists():
+        raise HTTPException(status_code=404, detail="No HTML backup to restore")
+    shutil.copy2(str(backup_path), str(out_path))
+    backup_path.unlink()
+    return {"html": out_path.read_text(encoding="utf-8")}
+
+
+@app.delete("/api/html-backup/{parish_id}/{date}/{ann_id}")
+def delete_html_backup(parish_id: str, date: str, ann_id: str):
+    run_dir = get_run_dir(parish_id, date)
+    backup_path = run_dir / "html" / f"announcement_{ann_id.zfill(2)}_backup.html"
+    if backup_path.exists():
+        backup_path.unlink()
+    return {"ok": True}
+
+
+@app.get("/api/source-crop/{parish_id}/{date}/{ann_id}")
+def get_source_crop(parish_id: str, date: str, ann_id: str):
+    run_dir = get_run_dir(parish_id, date)
+    locations_path = run_dir / "locations.json"
+    if not locations_path.exists():
+        raise HTTPException(status_code=404, detail="No source locations available")
+    locations = json.loads(locations_path.read_text())
+    location = locations.get(ann_id)
+    if not location:
+        raise HTTPException(status_code=404, detail="Source location not found for this announcement")
+
+    sys.path.insert(0, str(Path(__file__).parent.parent / "agents"))
+    from agent4a_image import crop_announcement
+
+    crop = crop_announcement(run_dir / "pages", location)
+    buf = io.BytesIO()
+    crop.save(buf, format="PNG")
+    buf.seek(0)
+    return StreamingResponse(buf, media_type="image/png", headers={"Cache-Control": "no-cache"})
+
+
+@app.get("/api/bulletin-page/{parish_id}/{date}/{ann_id}")
+def get_bulletin_page(parish_id: str, date: str, ann_id: str):
+    run_dir = get_run_dir(parish_id, date)
+    locations_path = run_dir / "locations.json"
+    if not locations_path.exists():
+        raise HTTPException(status_code=404, detail="No locations available")
+    locations = json.loads(locations_path.read_text())
+    location = locations.get(ann_id)
+    if not location:
+        raise HTTPException(status_code=404, detail="Location not found")
+
+    page_num = location["page"]
+    page_path = run_dir / "pages" / f"page_{page_num:02d}.png"
+    if not page_path.exists():
+        raise HTTPException(status_code=404, detail="Page image not found")
+    return FileResponse(str(page_path), media_type="image/png")
+
+
+@app.get("/api/location/{parish_id}/{date}/{ann_id}")
+def get_location(parish_id: str, date: str, ann_id: str):
+    run_dir = get_run_dir(parish_id, date)
+    locations_path = run_dir / "locations.json"
+    if not locations_path.exists():
+        raise HTTPException(status_code=404, detail="No locations")
+    locations = json.loads(locations_path.read_text())
+    loc = locations.get(ann_id)
+    if not loc:
+        raise HTTPException(status_code=404, detail="Not found")
+    return {"page": loc["page"], "top": loc["top"], "left": loc["left"], "bottom": loc["bottom"], "right": loc["right"]}
+
+
+class ManualCropRequest(BaseModel):
+    page: int
+    top: float
+    left: float
+    bottom: float
+    right: float
+
+
+@app.post("/api/manual-crop/{parish_id}/{date}/{ann_id}")
+def save_manual_crop(parish_id: str, date: str, ann_id: str, body: ManualCropRequest):
+    run_dir = get_run_dir(parish_id, date)
+    locations_path = run_dir / "locations.json"
+    locations = json.loads(locations_path.read_text()) if locations_path.exists() else {}
+    locations[ann_id] = {
+        "id": ann_id,
+        "page": body.page,
+        "top": round(body.top, 4),
+        "left": round(body.left, 4),
+        "bottom": round(body.bottom, 4),
+        "right": round(body.right, 4),
+        "manual": True,
+    }
+    locations_path.write_text(json.dumps(locations, indent=2, ensure_ascii=False))
+    return {"ok": True}
+
+
+@app.delete("/api/manual-crop/{parish_id}/{date}/{ann_id}")
+def delete_manual_crop(parish_id: str, date: str, ann_id: str):
+    run_dir = get_run_dir(parish_id, date)
+    locations_path = run_dir / "locations.json"
+    if not locations_path.exists():
+        return {"ok": True}
+    locations = json.loads(locations_path.read_text())
+    if ann_id in locations and locations[ann_id].get("manual"):
+        del locations[ann_id]
+        locations_path.write_text(json.dumps(locations, indent=2, ensure_ascii=False))
+    return {"ok": True}
 
 
 @app.get("/api/css/{parish_id}")
@@ -545,6 +739,7 @@ async def save_feedback(parish_id: str, date: str, ann_id: str, body: FeedbackRe
 
 class RegenRequest(BaseModel):
     instruction: str = ""
+    use_crop: bool = False
 
 
 @app.post("/api/regen/image/{parish_id}/{date}/{ann_id}")
@@ -561,7 +756,7 @@ async def regen_content_endpoint(parish_id: str, date: str, ann_id: str, body: R
     get_run_dir(parish_id, date)
     job_id = str(uuid.uuid4())
     _regen_jobs[job_id] = {"status": "running", "step": "generating", "detail": "Iniciando..."}
-    asyncio.create_task(_run_regen_content(job_id, parish_id, date, ann_id, body.instruction))
+    asyncio.create_task(_run_regen_content(job_id, parish_id, date, ann_id, body.instruction, body.use_crop))
     return {"job_id": job_id}
 
 
@@ -649,6 +844,7 @@ class WorkflowStartRequest(BaseModel):
     parish_id: str
     mode: str = "complete"  # "complete" | "images" | "content"
     reader_instruction: str = ""
+    bulletin_url: str = ""
 
 
 @app.post("/api/workflow/start")
@@ -663,7 +859,7 @@ async def workflow_start(body: WorkflowStartRequest):
         "output_dir": None,
         "date": None,
     }
-    asyncio.create_task(_run_workflow(job_id, body.parish_id, body.mode, body.reader_instruction))
+    asyncio.create_task(_run_workflow(job_id, body.parish_id, body.mode, body.reader_instruction, body.bulletin_url))
     return {"job_id": job_id}
 
 
@@ -730,6 +926,15 @@ async def review_single(parish_id: str, date: str, ann_id: str):
 @app.get("/api/parishes")
 def list_parishes():
     return sorted(p.stem for p in CONFIG_BASE.glob("*.yaml"))
+
+
+@app.get("/api/parish-config/{parish_id}")
+def get_parish_config(parish_id: str):
+    config = _load_parish_yaml(parish_id)
+    return {
+        "direct_pdf": config.get("scraper", {}).get("direct_pdf", False),
+        "name": config.get("parish", {}).get("name", parish_id),
+    }
 
 
 @app.get("/", response_class=HTMLResponse)

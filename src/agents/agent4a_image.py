@@ -10,12 +10,13 @@ import re
 import anthropic
 from google import genai
 from google.genai import types
+from openai import OpenAI
 from PIL import Image
 from dotenv import load_dotenv
 
 load_dotenv()
 
-OUTPUT_SIZE = (1080, 1350)
+OUTPUT_SIZE = (1080, 1620)
 PAGES_RANGE = [7, 8, 9, 10]
 
 
@@ -201,16 +202,50 @@ DESIGN RULES:
 Do not add watermarks, signatures, or any text not listed above."""
 
 
+def generate_image_with_openai(openai_client: OpenAI, crop: Image.Image, announcement: dict) -> Image.Image | None:
+    """Envia o recorte do anúncio ao gpt-image-1 para redesign como flyer."""
+    buf = io.BytesIO()
+    crop.save(buf, format="PNG")
+    buf.seek(0)
+
+    prompt = build_gemini_prompt(announcement) + (
+        "\n\nNOTE: The provided image contains ONLY this specific announcement, "
+        "already cropped and isolated. Use ALL visual elements from it (logos, photos, "
+        "colors, decorative elements) — do not invent or import any external elements."
+    )
+
+    try:
+        response = openai_client.images.edit(
+            model="gpt-image-2",
+            image=("bulletin_crop.png", buf, "image/png"),
+            prompt=prompt,
+            size="1024x1536",
+            n=1,
+        )
+    except Exception as e:
+        print(f"  OpenAI API error: {e}")
+        return None
+
+    if not response.data:
+        return None
+
+    item = response.data[0]
+    img_bytes = base64.b64decode(item.b64_json)
+    return Image.open(io.BytesIO(img_bytes)).convert("RGB")
+
+
 def resize_to_canvas(img: Image.Image, size: tuple) -> Image.Image:
-    """Redimensiona para o tamanho final mantendo proporção (cover)."""
+    """Redimensiona para o tamanho final mantendo proporção (contain — sem corte)."""
     cw, ch = size
     iw, ih = img.size
-    scale = max(cw / iw, ch / ih)
+    scale = min(cw / iw, ch / ih)
     new_w, new_h = int(iw * scale), int(ih * scale)
     resized = img.resize((new_w, new_h), Image.LANCZOS)
-    left = (new_w - cw) // 2
-    top = (new_h - ch) // 2
-    return resized.crop((left, top, left + cw, top + ch))
+    canvas = Image.new("RGB", (cw, ch), (0, 0, 0))
+    x = (cw - new_w) // 2
+    y = (ch - new_h) // 2
+    canvas.paste(resized, (x, y))
+    return canvas
 
 
 def generate_image_with_gemini(gemini_client: genai.Client, crop: Image.Image, announcement: dict) -> Image.Image | None:
@@ -255,7 +290,7 @@ def generate_image_with_gemini(gemini_client: genai.Client, crop: Image.Image, a
 
 async def run(output_dir: Path, parish_id: str) -> dict[str, str]:
     anthropic_client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-    gemini_client = genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
+    openai_client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
     announcements_path = output_dir / "announcements.json"
     announcements = json.loads(announcements_path.read_text())
@@ -298,15 +333,15 @@ async def run(output_dir: Path, parish_id: str) -> dict[str, str]:
 
         crop = crop_announcement(pages_dir, location)
 
-        generated = generate_image_with_gemini(gemini_client, crop, ann)
+        generated = generate_image_with_openai(openai_client, crop, ann)
         using_placeholder = False
         if generated is None:
             if placeholder_img:
-                print(f"  Aviso: Gemini não retornou imagem para [{ann_id}], usando placeholder.")
+                print(f"  Aviso: OpenAI não retornou imagem para [{ann_id}], usando placeholder.")
                 generated = placeholder_img
                 using_placeholder = True
             else:
-                print(f"  Aviso: Gemini não retornou imagem para [{ann_id}], usando recorte redimensionado.")
+                print(f"  Aviso: OpenAI não retornou imagem para [{ann_id}], usando recorte redimensionado.")
                 generated = crop
 
         final_img = resize_to_canvas(generated, OUTPUT_SIZE)

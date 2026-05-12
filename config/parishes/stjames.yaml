@@ -1,0 +1,15 @@
+parish:
+  id: "stjames"
+  name: "St. James Catholic Church"
+
+scraper:
+  direct_pdf: true
+
+reader:
+  bulletin_pages: [7]
+
+image_generator:
+  api: "openai_dalle3"
+  style_instructions: "Watercolor style, warm and welcoming, Catholic church aesthetic, soft pastel colors, appropriate for a parish bulletin announcement"
+  size: "1024x1024"
+  max_images_per_run: 10

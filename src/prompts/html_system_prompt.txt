@@ -57,7 +57,7 @@ BLOCK 3 — FOOTER (contact, registration, location):
 ---
 
 TRANSLATION RULES:
-- Always output THREE full language versions in this fixed order: English → Spanish → Portuguese (Brazil).
+- CRITICAL — LANGUAGE ORDER IS FIXED AND MUST NEVER CHANGE: output exactly THREE language versions in this order: (1) English, (2) Spanish, (3) Portuguese (Brazil). This order is absolute regardless of the source language, the language of any attached image, or the language of the announcement text.
 - Separate each version with exactly: <p align="center" style="color:gray;">- - -</p>
 - Translate whichever languages are missing from the original announcement. Never omit a language.
 - English: American English, natural tone.

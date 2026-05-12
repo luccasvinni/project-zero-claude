@@ -1,4 +1,5 @@
 import asyncio
+import io
 import json
 import os
 from pathlib import Path
@@ -98,13 +99,46 @@ async def generate_html_for_announcement(
     announcement: dict,
     system_prompt: str,
     qr_urls: list[str],
+    crop_image: "Image.Image | None" = None,
 ) -> str:
     user_message = build_user_message(announcement, qr_urls)
+
+    if crop_image is not None:
+        import base64 as _b64
+        # Redimensiona para no máximo 900px no lado maior antes de codificar
+        _img = crop_image.copy()
+        _max = 900
+        if max(_img.size) > _max:
+            _scale = _max / max(_img.size)
+            _img = _img.resize((int(_img.width * _scale), int(_img.height * _scale)), Image.LANCZOS)
+        buf = io.BytesIO()
+        _img.save(buf, format="JPEG", quality=85)
+        img_b64 = _b64.standard_b64encode(buf.getvalue()).decode()
+        content: list | str = [
+            {
+                "type": "image",
+                "source": {"type": "base64", "media_type": "image/jpeg", "data": img_b64},
+            },
+            {
+                "type": "text",
+                "text": (
+                    "The image above is the source region of this announcement as it appears "
+                    "in the bulletin. Use it as visual context (logos, photos, layout) when "
+                    "generating the HTML.\n\n"
+                    "REMINDER: Regardless of the language shown in the image, the output MUST "
+                    "follow the fixed language order: (1) English, (2) Spanish, (3) Portuguese.\n\n"
+                    + user_message
+                ),
+            },
+        ]
+    else:
+        content = user_message
+
     response = client.messages.create(
         model="claude-opus-4-5",
         max_tokens=4096,
         system=system_prompt,
-        messages=[{"role": "user", "content": user_message}],
+        messages=[{"role": "user", "content": content}],
     )
     html = response.content[0].text.strip()
     # Remove possível markdown code block

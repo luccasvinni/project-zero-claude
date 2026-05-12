@@ -91,7 +91,22 @@ async def find_latest_bulletin_pdf(page_url: str) -> str | None:
     return None
 
 
+def _resolve_pdf_url(url: str) -> str:
+    """Extrai a URL real do PDF caso venha embutida em parâmetros de query."""
+    from urllib.parse import urlparse, parse_qs, unquote
+    parsed = urlparse(url)
+    qs = parse_qs(parsed.query)
+    for key in ("selectedPublication", "pdf", "file", "url"):
+        if key in qs:
+            candidate = unquote(qs[key][0])
+            if candidate.lower().endswith(".pdf"):
+                print(f"PDF extraído do parâmetro '{key}': {candidate}")
+                return candidate
+    return url
+
+
 async def download_pdf(pdf_url: str, parish_id: str) -> Path:
+    pdf_url = _resolve_pdf_url(pdf_url)
     filename = pdf_url.split("/")[-1].split("?")[0] or "bulletin.pdf"
 
     # Use date from filename when it follows YYYYMMDD pattern

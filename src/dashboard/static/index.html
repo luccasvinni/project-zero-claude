@@ -61,11 +61,34 @@
 
   /* CARD: image */
   .card-image-wrap { position: relative; background: #0d0d0d; overflow: hidden; }
-  .card-image-wrap img { width: 100%; aspect-ratio: 4 / 5; object-fit: contain; display: block; }
-  .img-no-image { color: #666; padding: 3rem; text-align: center; font-size: .85rem; aspect-ratio: 4 / 5; display: flex; align-items: center; justify-content: center; }
-  .img-download-btn { position: absolute; bottom: 10px; right: 10px; height: 34px; width: 34px; border-radius: 50%; background: rgba(26,58,92,.88); border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; text-decoration: none; box-shadow: 0 2px 8px rgba(0,0,0,.35); transition: background .2s, transform .2s; }
+  .card-image-wrap img { width: 100%; aspect-ratio: 2 / 3; object-fit: contain; display: block; }
+  .img-no-image { color: #666; padding: 3rem; text-align: center; font-size: .85rem; aspect-ratio: 2 / 3; display: flex; align-items: center; justify-content: center; }
+  .img-btn-stack { position: absolute; bottom: 10px; right: 10px; display: flex; flex-direction: column; gap: 8px; align-items: center; }
+  .img-btn-item { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+  .img-btn-label { font-size: .56rem; font-weight: 700; color: rgba(255,255,255,.9); text-transform: uppercase; letter-spacing: .04em; text-align: center; line-height: 1.2; max-width: 58px; text-shadow: 0 1px 4px rgba(0,0,0,.7); pointer-events: none; }
+  .img-download-btn { height: 34px; width: 34px; border-radius: 50%; background: rgba(26,58,92,.88); border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; text-decoration: none; box-shadow: 0 2px 8px rgba(0,0,0,.35); transition: background .2s, transform .2s; }
   .img-download-btn:hover { background: #4a9eda; transform: scale(1.15); }
+  .img-ctrl-btn { height: 34px; width: 34px; border-radius: 50%; background: rgba(26,58,92,.88); border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(0,0,0,.35); transition: background .2s, transform .2s; }
+  .img-ctrl-btn:hover { background: #4a9eda; transform: scale(1.15); }
+  .img-ctrl-btn.source-active { background: #0e7490; }
   .download-icon { width: 16px; height: 16px; object-fit: contain; filter: brightness(0) invert(1); }
+
+  /* SOURCE TAG overlay */
+  .img-source-tag { position: absolute; top: 8px; left: 8px; }
+  .img-source-tag button { background: rgba(14,116,144,.92); color: #fff; border: none; border-radius: 20px; padding: 4px 11px; font-size: .68rem; font-weight: 700; cursor: pointer; letter-spacing: .04em; font-family: 'Work Sans', sans-serif; transition: background .15s; }
+  .img-source-tag button:hover { background: #0e7490; }
+
+  /* CROP MODAL */
+  .crop-modal-inner { max-width: 680px; width: 95%; max-height: 92vh; display: flex; flex-direction: column; background: #fff; border-radius: 14px; padding: 1.5rem 1.5rem 0; box-shadow: 0 20px 60px rgba(0,0,0,.3); font-family: 'Work Sans', sans-serif; overflow: hidden; }
+  .crop-area-row { flex: 1; min-height: 0; min-width: 0; display: flex; gap: .5rem; align-items: flex-start; overflow: hidden; }
+  .crop-scroll { flex: 1; min-width: 0; min-height: 0; overflow: auto; padding: .25rem 0; }
+  .crop-zoom-col { display: flex; flex-direction: column; align-items: center; gap: .3rem; padding-top: .25rem; flex-shrink: 0; }
+  .crop-zoom-btn { width:28px;height:28px;border-radius:6px;border:1px solid #d1d5db;background:#fff;font-size:1.1rem;font-weight:700;color:#1a3a5c;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;transition:background .15s; }
+  .crop-zoom-btn:hover { background:#f1f5f9; }
+  .crop-zoom-btn:disabled { opacity:.35;cursor:not-allowed; }
+  .crop-container { position: relative; user-select: none; border: 1px solid #e2e8f0; border-radius: 8px; cursor: crosshair; line-height: 0; touch-action: none; display: inline-block; }
+  .crop-page-img { display: block; max-width: 100%; max-height: calc(92vh - 190px); width: auto; height: auto; pointer-events: none; }
+  .crop-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 
   /* CARD: body */
   .card-body { padding: 1rem 1.25rem 1.2rem; display: flex; flex-direction: column; gap: .75rem; flex: 1; }
@@ -130,7 +153,7 @@
   .btn-danger:hover { background: #fecaca; }
   .btn-success { background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
   .btn-success:hover { background: #a7f3d0; }
-  .btn-sm { padding: 5px 10px; font-size: .68rem; }
+  .btn-sm { padding: 8px 15px; font-size: .72rem; }
 
   /* MODAL */
   .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 200; display: none; align-items: center; justify-content: center; }
@@ -154,6 +177,7 @@
 
   /* SPINNER */
   .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,.4); border-top-color: #fff; border-radius: 50%; animation: spin .6s linear infinite; }
+  .icon-spin img, img.icon-spin { animation: spin .7s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
   .empty-state { grid-column: 1/-1; text-align: center; padding: 4rem; color: #94a3b8; }
@@ -228,7 +252,12 @@
     <h3>▶ Iniciar Workflow</h3>
     <div id="workflow-setup">
       <label style="display:block;margin-bottom:.4rem;font-size:.84rem;font-weight:600">Paróquia</label>
-      <select id="workflow-parish" style="width:100%;padding:.45rem .6rem;border:1px solid #e2e8f0;border-radius:6px;font-size:.9rem;margin-bottom:1rem"></select>
+      <select id="workflow-parish" style="width:100%;padding:.45rem .6rem;border:1px solid #e2e8f0;border-radius:6px;font-size:.9rem;margin-bottom:1rem" onchange="updateParishConfig()"></select>
+
+      <div id="parish-url-wrap" style="display:none;margin-bottom:1rem">
+        <label style="display:block;margin-bottom:.4rem;font-size:.84rem;font-weight:600">Link do boletim (PDF) <span style="font-weight:400;color:#dc2626;font-size:.76rem">*obrigatório</span></label>
+        <input id="parish-bulletin-url" type="url" placeholder="https://..." style="width:100%;padding:.45rem .6rem;border:1px solid #e2e8f0;border-radius:6px;font-size:.85rem;font-family:inherit;outline:none">
+      </div>
 
       <label style="display:block;margin-bottom:.5rem;font-size:.84rem;font-weight:600">Modo</label>
       <div style="display:flex;gap:.5rem;margin-bottom:1.2rem" id="workflow-mode-btns">
@@ -267,6 +296,124 @@
   </div>
 </div>
 
+<!-- MODAL: Comparison (image + html) -->
+<div class="modal-backdrop" id="compare-modal">
+  <div class="modal" style="max-width:780px;width:95%;max-height:92vh;overflow-y:auto">
+    <h3 style="margin-bottom:.25rem">Comparar gerações</h3>
+    <p style="font-size:.82rem;color:#94a3b8;margin-bottom:.9rem">Clique na versão que deseja manter e confirme ao final.</p>
+
+    <!-- Image section -->
+    <div id="compare-image-section" style="display:none">
+      <div style="font-size:.63rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#64748b;margin-bottom:.5rem">Imagem</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;margin-bottom:.75rem">
+        <div id="cmp-img-old" onclick="selectImageChoice('old')" style="display:flex;flex-direction:column;gap:.5rem;cursor:pointer;opacity:.45;transition:opacity .2s">
+          <div style="font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#94a3b8;text-align:center">Anterior</div>
+          <img id="compare-old-img" style="width:100%;aspect-ratio:2/3;object-fit:contain;background:#0d0d0d;border-radius:10px;display:block;outline:2px solid transparent;transition:outline .15s">
+        </div>
+        <div id="cmp-img-new" onclick="selectImageChoice('new')" style="display:flex;flex-direction:column;gap:.5rem;cursor:pointer;opacity:1;transition:opacity .2s">
+          <div style="font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#1a3a5c;text-align:center"><span style="background:#1a3a5c;color:#fff;border-radius:20px;padding:1px 7px">NOVA</span></div>
+          <img id="compare-new-img" style="width:100%;aspect-ratio:2/3;object-fit:contain;background:#0d0d0d;border-radius:10px;display:block;outline:3px solid #fbd024;outline-offset:2px;transition:outline .15s">
+        </div>
+      </div>
+    </div>
+
+    <!-- HTML section -->
+    <div id="compare-html-section" style="display:none">
+      <div id="compare-html-divider" style="border-top:1px solid #e8ecf0;margin:.5rem 0 .75rem"></div>
+      <div style="font-size:.63rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#64748b;margin-bottom:.5rem">Texto</div>
+      <div id="compare-html-pending" style="text-align:center;color:#94a3b8;font-size:.82rem;padding:1.25rem;display:flex;align-items:center;justify-content:center;gap:.5rem">
+        <span class="spinner" style="border-color:rgba(148,163,184,.35);border-top-color:#94a3b8"></span>
+        Aguardando geração de texto...
+      </div>
+      <div id="compare-html-content" style="display:none;margin-bottom:.75rem">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem">
+          <div id="cmp-html-old" style="display:flex;flex-direction:column;gap:.5rem;cursor:pointer;opacity:.45;transition:opacity .2s">
+            <div style="font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#94a3b8;text-align:center">Anterior</div>
+            <div style="position:relative;border-radius:8px;overflow:hidden">
+              <iframe id="compare-old-html" style="width:100%;border:1px solid #e8ecf0;border-radius:8px;min-height:180px;display:block;pointer-events:none;transition:border .15s"></iframe>
+              <div onclick="selectHtmlChoice('old')" style="position:absolute;inset:0;cursor:pointer"></div>
+            </div>
+          </div>
+          <div id="cmp-html-new" style="display:flex;flex-direction:column;gap:.5rem;cursor:pointer;opacity:1;transition:opacity .2s">
+            <div style="font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#1a3a5c;text-align:center"><span style="background:#1a3a5c;color:#fff;border-radius:20px;padding:1px 7px">NOVA</span></div>
+            <div style="position:relative;border-radius:8px;overflow:hidden">
+              <iframe id="compare-new-html" style="width:100%;border:2px solid #fbd024;border-radius:8px;min-height:180px;display:block;pointer-events:none;transition:border .15s"></iframe>
+              <div onclick="selectHtmlChoice('new')" style="position:absolute;inset:0;cursor:pointer"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div style="border-top:1px solid #e8ecf0;padding-top:.75rem;display:flex;justify-content:flex-end;gap:.5rem;margin-top:.25rem">
+      <button class="btn btn-secondary" onclick="closeCompareModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmComparison()">✓ Confirmar seleção</button>
+    </div>
+
+  </div>
+</div>
+
+<!-- MODAL: Manual Crop -->
+<div class="modal-backdrop" id="crop-modal">
+  <div class="crop-modal-inner">
+    <h3 style="flex-shrink:0;margin-bottom:.4rem">Marcar área manualmente</h3>
+    <p style="font-size:.82rem;color:#64748b;margin-bottom:.3rem;flex-shrink:0">Arraste para selecionar a área do anúncio que o agente usará para gerar a imagem.</p>
+    <p style="font-size:.73rem;color:#94a3b8;margin-bottom:.65rem;flex-shrink:0">✋ Arraste sobre a seleção existente para movê-la</p>
+    <div class="crop-area-row">
+      <div class="crop-scroll">
+        <div class="crop-container" id="crop-container">
+          <img class="crop-page-img" id="crop-page-img" alt="Página do boletim">
+          <canvas class="crop-canvas" id="crop-canvas"></canvas>
+        </div>
+      </div>
+      <div class="crop-zoom-col">
+        <button class="crop-zoom-btn" id="crop-zoom-in" onclick="changeCropZoom(+1)" title="Zoom in">+</button>
+        <span id="crop-zoom-label" style="font-size:.65rem;font-weight:700;color:#94a3b8;min-width:2.2rem;text-align:center">100%</span>
+        <button class="crop-zoom-btn" id="crop-zoom-out" onclick="changeCropZoom(-1)" title="Zoom out">−</button>
+        <div style="width:20px;height:1px;background:#e2e8f0;margin:.15rem 0"></div>
+        <button class="crop-zoom-btn" id="crop-pan-btn" onclick="toggleCropPan()" title="Mover imagem" style="font-size:.85rem">✋</button>
+      </div>
+    </div>
+    <div style="flex-shrink:0;padding:.9rem 0 1.2rem;display:flex;justify-content:space-between;align-items:center;gap:.5rem;flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap">
+        <button class="btn btn-danger btn-sm" onclick="clearManualCrop()">↺ Limpar marcação</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:.5rem">
+        <button class="btn btn-secondary btn-sm" onclick="closeModal('crop-modal')" id="crop-cancel-btn">Cancelar</button>
+        <div id="crop-regen-status" style="display:none;align-items:center;gap:.4rem;color:#94a3b8;font-size:.73rem;font-weight:600">
+          <span class="spinner" style="border-color:rgba(148,163,184,.35);border-top-color:#94a3b8"></span>
+          Gerando...
+        </div>
+        <button class="btn btn-primary btn-sm" id="crop-regen-btn" onclick="regenFromCrop()">↻ Gerar nova imagem</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Generic confirmation -->
+<div class="modal-backdrop" id="confirm-modal" style="z-index:300">
+  <div class="modal" style="max-width:340px">
+    <h3 id="confirm-title" style="margin-bottom:.6rem"></h3>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('confirm-modal')">Cancelar</button>
+      <button class="btn btn-primary" id="confirm-ok-btn">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Update texts confirmation -->
+<div class="modal-backdrop" id="update-texts-modal" style="z-index:250">
+  <div class="modal" style="max-width:380px">
+    <h3 style="margin-bottom:.6rem">Atualizar textos também?</h3>
+    <p style="font-size:.84rem;color:#64748b;line-height:1.55;margin-bottom:1.2rem">Deseja regenerar os textos do anúncio com base na nova marcação?</p>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="_doRegenFromCrop(false)">Não, só a imagem</button>
+      <button class="btn btn-primary" onclick="_doRegenFromCrop(true)">Sim, atualizar tudo</button>
+    </div>
+  </div>
+</div>
+
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
@@ -276,6 +423,16 @@ let parishId = '';
 let dateStr = '';
 let parishCss = '';
 let editingAnnId = null;
+
+const _sourceView = {};
+const _cropState = { annId: null, page: null, drawing: false, sx: 0, sy: 0, ex: 0, ey: 0, sel: null, zoom: 1.0, baseW: null, panMode: false };
+const ZOOM_STEPS = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0];
+const _compareState = {
+  annId: null,
+  hasImage: false, imageChoice: 'new',
+  hasHtml: false,  htmlChoice: 'new',
+  pendingNewHtml: null,
+};
 
 // Map of parish_id -> [{parish_id, date}, ...]  (most recent first)
 let _parishRuns = {};
@@ -344,7 +501,10 @@ async function init() {
   const savedJob = localStorage.getItem('workflow_job_id');
   if (savedJob) resumeWorkflowPolling(savedJob);
 
-  const runs = await fetch('/api/runs').then(r => r.json());
+  const [runs, allParishes] = await Promise.all([
+    fetch('/api/runs').then(r => r.json()),
+    fetch('/api/parishes').then(r => r.json()),
+  ]);
 
   _parishRuns = {};
   runs.forEach(r => {
@@ -352,7 +512,10 @@ async function init() {
     _parishRuns[r.parish_id].push(r);
   });
 
-  const parishes = Object.keys(_parishRuns);
+  // Include configured parishes even if they have no runs yet
+  allParishes.forEach(p => { if (!_parishRuns[p]) _parishRuns[p] = []; });
+
+  const parishes = Object.keys(_parishRuns).sort();
   const dropdown = document.getElementById('parish-dropdown');
   dropdown.innerHTML = parishes.map(p =>
     `<div class="parish-option" data-parish="${escHtml(p)}" onclick="selectParish(this.dataset.parish)">${escHtml(p)}</div>`
@@ -419,7 +582,7 @@ async function pollWorkflowBar(job_id) {
       }
       // Rebuild dropdown and select updated parish
       const dropdown = document.getElementById('parish-dropdown');
-      dropdown.innerHTML = Object.keys(_parishRuns).map(p =>
+      dropdown.innerHTML = Object.keys(_parishRuns).sort().map(p =>
         `<div class="parish-option" data-parish="${escHtml(p)}" onclick="selectParish(this.dataset.parish)">${escHtml(p)}</div>`
       ).join('');
       selectParish(job.parish_id);
@@ -433,7 +596,11 @@ async function pollWorkflowBar(job_id) {
 }
 
 // --- Render ---
+let _gridCacheBust = Date.now();
+
 function renderGrid() {
+  _gridCacheBust = Date.now();
+  Object.keys(_sourceView).forEach(k => delete _sourceView[k]);
   const grid = document.getElementById('grid');
   if (!allAnnouncements.length) {
     grid.innerHTML = '<div class="empty-state">Nenhum anúncio encontrado.</div>';
@@ -464,10 +631,26 @@ function cardHtml(ann) {
   <div class="card" id="card-${id}">
     <div class="card-image-wrap">
       ${ann.has_image
-        ? `<img src="/api/image/${parishId}/${dateStr}/${id}" id="img-${id}" alt="${escHtml(ann.title)}">`
+        ? `<img src="/api/image/${parishId}/${dateStr}/${id}?t=${_gridCacheBust}" id="img-${id}" alt="${escHtml(ann.title)}">`
         : `<div class="img-no-image">Imagem não gerada</div>`}
-      ${ann.has_image ? `<a class="img-download-btn" href="/api/image/${parishId}/${dateStr}/${id}" download="announcement_${String(id).padStart(2,'0')}.png"><img class="download-icon" src="/static/icon-download.png" alt=""></a>` : ''}
     </div>
+
+    ${ann.has_image ? `
+    <div style="display:flex;gap:.35rem;flex-wrap:wrap;padding:.9rem .85rem;border-bottom:1px solid #f1f5f9">
+      <a class="btn btn-secondary btn-sm" id="dl-btn-${id}" href="/api/image/${parishId}/${dateStr}/${id}?t=${_gridCacheBust}" download="announcement_${String(id).padStart(2,'0')}.png" style="text-decoration:none">
+        <img src="/static/icon-download.png" alt="" style="width:13px;height:13px;object-fit:contain;filter:brightness(0) opacity(.5)"> Baixar imagem
+      </a>
+      ${ann.has_source ? `
+      <button class="btn btn-secondary btn-sm" id="source-btn-${id}" onclick="toggleSourceImage('${id}')">
+        <img src="/static/icon-photo.png" alt="" style="width:13px;height:13px;object-fit:contain;filter:brightness(0) opacity(.5)" id="source-btn-icon-${id}">
+        <span id="source-btn-label-${id}">Ver imagem fonte</span>
+      </button>
+      <button class="btn btn-secondary btn-sm" id="mark-btn-${id}" onclick="openManualCrop('${id}')">
+        <img src="/static/icon-edit.png" alt="" style="width:13px;height:13px;object-fit:contain;filter:brightness(0) opacity(.5)"> Marcar manualmente
+      </button>
+      ` : ''}
+    </div>
+    ` : ''}
 
     <div class="card-body">
       <div class="card-meta">
@@ -1029,9 +1212,19 @@ function closeModal(id) {
   if (id === 'corrections-modal') correctingAnnId = null;
 }
 
+function showConfirm(message, onConfirm) {
+  document.getElementById('confirm-title').textContent = message;
+  const btn = document.getElementById('confirm-ok-btn');
+  btn.onclick = () => { closeModal('confirm-modal'); onConfirm(); };
+  document.getElementById('confirm-modal').classList.add('open');
+}
+
 document.querySelectorAll('.modal-backdrop').forEach(el => {
   el.addEventListener('click', e => {
-    if (e.target === e.currentTarget) closeModal(el.id);
+    if (e.target !== e.currentTarget) return;
+    if (el.id === 'compare-modal') closeCompareModal();
+    else if (el.id === 'update-texts-modal') _doRegenFromCrop(false);
+    else closeModal(el.id);
   });
 });
 
@@ -1053,6 +1246,19 @@ function selectMode(mode) {
   });
   const wrap = document.getElementById('reader-instruction-wrap');
   if (wrap) wrap.style.display = mode === 'complete' ? '' : 'none';
+  const urlWrap = document.getElementById('parish-url-wrap');
+  if (urlWrap) urlWrap.style.display = (_parishDirectPdf && mode === 'complete') ? '' : 'none';
+}
+
+let _parishDirectPdf = false;
+
+async function updateParishConfig() {
+  const parish = document.getElementById('workflow-parish').value;
+  if (!parish) return;
+  const cfg = await fetch(`/api/parish-config/${encodeURIComponent(parish)}`).then(r => r.json());
+  _parishDirectPdf = !!cfg.direct_pdf;
+  const wrap = document.getElementById('parish-url-wrap');
+  if (wrap) wrap.style.display = (_parishDirectPdf && _selectedMode === 'complete') ? '' : 'none';
 }
 
 async function openWorkflowModal() {
@@ -1065,17 +1271,24 @@ async function openWorkflowModal() {
   document.getElementById('workflow-setup').style.display = '';
   document.getElementById('workflow-progress').style.display = 'none';
   document.getElementById('workflow-modal').classList.add('open');
+  await updateParishConfig();
 }
 
 async function startWorkflow() {
   const parish = document.getElementById('workflow-parish').value;
   if (!parish) return;
 
+  const bulletinUrl = document.getElementById('parish-bulletin-url')?.value?.trim() || '';
+  if (_parishDirectPdf && _selectedMode === 'complete' && !bulletinUrl) {
+    showToast('Informe o link do boletim PDF para esta paróquia.', true);
+    return;
+  }
+
   const readerInstruction = document.getElementById('reader-instruction')?.value?.trim() || '';
   const res = await fetch('/api/workflow/start', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({ parish_id: parish, mode: _selectedMode, reader_instruction: readerInstruction }),
+    body: JSON.stringify({ parish_id: parish, mode: _selectedMode, reader_instruction: readerInstruction, bulletin_url: bulletinUrl }),
   });
   const { job_id } = await res.json();
   localStorage.setItem('workflow_job_id', job_id);
@@ -1115,15 +1328,7 @@ async function reviewAnn(id) {
   const wrap = document.getElementById(`review-wrap-${id}`);
   if (wrap) {
     const btn = wrap.querySelector('.btn-instr');
-    if (btn) { btn.disabled = true; btn.style.display = 'none'; }
-    let statusEl = wrap.querySelector('.review-status-msg');
-    if (!statusEl) {
-      statusEl = document.createElement('span');
-      statusEl.className = 'review-status-msg';
-      statusEl.style.cssText = 'font-size:.72rem;color:#b45309;margin-left:auto';
-      btn && btn.parentNode.appendChild(statusEl);
-    }
-    statusEl.textContent = 'Revisando...';
+    if (btn) { btn.disabled = true; btn.classList.add('icon-spin'); }
   }
 
   const res = await fetch(`/api/review/${parishId}/${dateStr}/${id}`, { method: 'POST' });
@@ -1132,10 +1337,9 @@ async function reviewAnn(id) {
     try { const e = await res.json(); if (e.detail) msg = e.detail; } catch {}
     if (wrap) {
       const btn = wrap.querySelector('.btn-instr');
-      if (btn) { btn.disabled = false; btn.style.display = ''; }
-      const statusEl = wrap.querySelector('.review-status-msg');
-      if (statusEl) statusEl.textContent = msg;
+      if (btn) { btn.disabled = false; btn.classList.remove('icon-spin'); }
     }
+    showToast(msg, true);
     return;
   }
   const data = await res.json();
@@ -1183,7 +1387,7 @@ async function regenImage(id) {
   const statusEl = document.getElementById(`regen-image-status-${id}`);
   const btn = document.getElementById(`regen-image-btn-${id}`);
   if (statusEl) statusEl.textContent = 'Gerando...';
-  if (btn) btn.disabled = true;
+  if (btn) { btn.disabled = true; btn.classList.add('icon-spin'); }
   const instruction = _pontualInstr[`${id}-image`] || '';
   const res = await fetch(`/api/regen/image/${parishId}/${dateStr}/${id}`, {
     method: 'POST',
@@ -1199,7 +1403,7 @@ async function regenContent(id) {
   const statusEl = document.getElementById(`regen-content-status-${id}`);
   const btn = document.getElementById(`regen-content-btn-${id}`);
   if (statusEl) statusEl.textContent = 'Gerando...';
-  if (btn) btn.disabled = true;
+  if (btn) { btn.disabled = true; btn.classList.add('icon-spin'); }
   const instruction = _pontualInstr[`${id}-content`] || '';
   const res = await fetch(`/api/regen/content/${parishId}/${dateStr}/${id}`, {
     method: 'POST',
@@ -1256,33 +1460,636 @@ function resetRegenArea(id, type) {
 
 async function pollRegen(job_id, id, type) {
   const statusEl = document.getElementById(`regen-${type}-status-${id}`);
-  const job = await fetch(`/api/regen/status/${job_id}`).then(r => r.json()).catch(() => null);
-  if (!job) return;
+  const job = await fetch(`/api/regen/status/${job_id}`)
+    .then(r => { if (!r.ok) return null; return r.json(); })
+    .catch(() => null);
+  if (!job) {
+    const regenBtn = document.getElementById(`regen-${type}-btn-${id}`);
+    if (regenBtn) { regenBtn.disabled = false; regenBtn.classList.remove('icon-spin'); }
+    if (statusEl) { statusEl.textContent = ''; }
+    resetRegenArea(id, type);
+    return;
+  }
   const regenBtn = document.getElementById(`regen-${type}-btn-${id}`);
   if (job.status === 'done') {
     if (statusEl) { statusEl.textContent = '✓ Concluído'; setTimeout(() => { statusEl.textContent = ''; }, 3000); }
-    if (regenBtn) regenBtn.disabled = false;
+    if (regenBtn) { regenBtn.disabled = false; regenBtn.classList.remove('icon-spin'); }
     resetRegenArea(id, type);
     if (type === 'image') {
-      const img = document.getElementById(`img-${id}`);
-      if (img) img.src = `/api/image/${parishId}/${dateStr}/${id}?t=${Date.now()}`;
-    } else if (job.html) {
-      const ann = allAnnouncements.find(a => String(a.id) === String(id));
-      if (ann) {
-        ann.html_content = job.html;
-        const editor = document.getElementById(`editor-${id}`);
-        if (editor) editor.value = job.html;
-        refreshPreview(id);
+      const newUrl = `/api/image/${parishId}/${dateStr}/${id}?t=${Date.now()}`;
+      if (job.has_backup) {
+        showImageComparison(id, newUrl);
+      } else {
+        const img = document.getElementById(`img-${id}`);
+        if (img) img.src = newUrl;
+        showToast('Imagem gerada com sucesso!');
+      }
+    } else {
+      if (job.has_html_backup) {
+        const oldRes = await fetch(`/api/html-backup/${parishId}/${dateStr}/${id}`);
+        const oldData = await oldRes.json();
+        populateHtmlComparison(id, oldData.html || '', job.html || '');
+      } else {
+        if (job.html) {
+          const ann = allAnnouncements.find(a => String(a.id) === String(id));
+          if (ann) {
+            ann.html_content = job.html;
+            const editor = document.getElementById(`editor-${id}`);
+            if (editor) editor.value = job.html;
+            refreshPreview(id);
+          }
+        }
+        showToast('Texto gerado com sucesso!');
       }
     }
   } else if (job.status === 'error') {
     if (statusEl) { statusEl.textContent = '✗ Erro'; setTimeout(() => { statusEl.textContent = ''; }, 4000); }
-    if (regenBtn) regenBtn.disabled = false;
+    if (regenBtn) { regenBtn.disabled = false; regenBtn.classList.remove('icon-spin'); }
     showToast(`Erro: ${job.detail}`, true);
   } else {
     if (statusEl) statusEl.textContent = `${job.detail || 'Processando...'}`;
     setTimeout(() => pollRegen(job_id, id, type), 3000);
   }
+}
+
+// --- Source image toggle ---
+function toggleSourceImage(id) {
+  const imgEl = document.getElementById(`img-${id}`);
+  const sourceBtn = document.getElementById(`source-btn-${id}`);
+  const sourceBtnLabel = document.getElementById(`source-btn-label-${id}`);
+  const sourceBtnIcon = document.getElementById(`source-btn-icon-${id}`);
+  const dlBtn = document.getElementById(`dl-btn-${id}`);
+
+  if (_sourceView[id]) {
+    imgEl.src = `/api/image/${parishId}/${dateStr}/${id}`;
+    _sourceView[id] = false;
+    if (sourceBtn) { sourceBtn.classList.add('btn-secondary'); sourceBtn.classList.remove('btn-primary'); }
+    if (sourceBtnIcon) sourceBtnIcon.style.filter = 'brightness(0) opacity(.5)';
+    if (sourceBtnLabel) sourceBtnLabel.textContent = 'Ver imagem fonte';
+    if (dlBtn) dlBtn.href = `/api/image/${parishId}/${dateStr}/${id}`;
+  } else {
+    imgEl.src = `/api/source-crop/${parishId}/${dateStr}/${id}?t=${Date.now()}`;
+    _sourceView[id] = true;
+    if (sourceBtn) { sourceBtn.classList.remove('btn-secondary'); sourceBtn.classList.add('btn-primary'); }
+    if (sourceBtnIcon) sourceBtnIcon.style.filter = 'brightness(0) invert(1)';
+    if (sourceBtnLabel) sourceBtnLabel.textContent = 'Ver imagem gerada';
+    if (dlBtn) dlBtn.href = `/api/source-crop/${parishId}/${dateStr}/${id}`;
+  }
+}
+
+// --- Manual crop ---
+function _updateZoomUI() {
+  const pct = Math.round(_cropState.zoom * 100);
+  const label = document.getElementById('crop-zoom-label');
+  if (label) label.textContent = pct + '%';
+  const idx = ZOOM_STEPS.indexOf(_cropState.zoom);
+  const btnIn  = document.getElementById('crop-zoom-in');
+  const btnOut = document.getElementById('crop-zoom-out');
+  if (btnIn)  btnIn.disabled  = idx >= ZOOM_STEPS.length - 1;
+  if (btnOut) btnOut.disabled = idx <= 0;
+}
+
+function changeCropZoom(delta) {
+  const idx = ZOOM_STEPS.indexOf(_cropState.zoom);
+  const next = idx + delta;
+  if (next < 0 || next >= ZOOM_STEPS.length) return;
+  _cropState.zoom = ZOOM_STEPS[next];
+  applyCropZoom();
+  _updateZoomUI();
+}
+
+function toggleCropPan() {
+  _cropState.panMode = !_cropState.panMode;
+  const btn = document.getElementById('crop-pan-btn');
+  const canvas = document.getElementById('crop-canvas');
+  if (btn) {
+    btn.style.background   = _cropState.panMode ? '#e0f2fe' : '';
+    btn.style.borderColor  = _cropState.panMode ? '#0ea5e9' : '';
+    btn.style.color        = _cropState.panMode ? '#0369a1' : '';
+  }
+  if (canvas) canvas.style.cursor = _cropState.panMode ? 'grab' : 'crosshair';
+}
+
+function applyCropZoom() {
+  const img = document.getElementById('crop-page-img');
+  const canvas = document.getElementById('crop-canvas');
+  const scrollEl = document.querySelector('.crop-scroll');
+  if (!_cropState.baseW || !img || !scrollEl) return;
+
+  // Anchor point: center of selection, or scroll viewport center if no selection
+  let anchorPctX = 0.5, anchorPctY = 0.5;
+  if (_cropState.sel) {
+    anchorPctX = (_cropState.sel.left + _cropState.sel.right) / 2;
+    anchorPctY = (_cropState.sel.top  + _cropState.sel.bottom) / 2;
+  }
+  const oldW = img.offsetWidth;
+  const oldH = img.offsetHeight;
+  const viewX = anchorPctX * oldW - scrollEl.scrollLeft;
+  const viewY = anchorPctY * oldH - scrollEl.scrollTop;
+
+  if (_cropState.zoom === 1.0) {
+    img.style.width = '';
+    img.style.maxWidth = '';
+    img.style.maxHeight = '';
+  } else {
+    img.style.width = (_cropState.baseW * _cropState.zoom) + 'px';
+    img.style.maxWidth = 'none';
+    img.style.maxHeight = 'none';
+  }
+  requestAnimationFrame(() => {
+    canvas.width = img.offsetWidth;
+    canvas.height = img.offsetHeight;
+    // Adjust scroll so anchor stays at the same viewport position
+    scrollEl.scrollLeft = anchorPctX * img.offsetWidth  - viewX;
+    scrollEl.scrollTop  = anchorPctY * img.offsetHeight - viewY;
+    if (_cropState.sel) {
+      drawCropRect(_cropState.sel.left, _cropState.sel.top, _cropState.sel.right, _cropState.sel.bottom);
+    } else {
+      canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+    }
+  });
+}
+
+async function openManualCrop(id) {
+  const locRes = await fetch(`/api/location/${parishId}/${dateStr}/${id}`);
+  if (!locRes.ok) { showToast('Localização fonte não disponível.', true); return; }
+  const loc = await locRes.json();
+
+  _cropState.annId = id;
+  _cropState.page = loc.page;
+  _cropState.sel = { top: loc.top, left: loc.left, bottom: loc.bottom, right: loc.right };
+  _cropState.drawing = false;
+  _cropState.zoom = 1.0;
+  _cropState.baseW = null;
+  _cropState.panMode = false;
+
+  const img = document.getElementById('crop-page-img');
+  img.style.width = '';
+  img.style.maxWidth = '';
+  img.style.maxHeight = '';
+  const panBtn = document.getElementById('crop-pan-btn');
+  if (panBtn) { panBtn.style.background = ''; panBtn.style.borderColor = ''; }
+  img.src = `/api/bulletin-page/${parishId}/${dateStr}/${id}`;
+  document.getElementById('crop-modal').classList.add('open');
+  _updateZoomUI();
+
+  if (img.complete && img.naturalWidth) {
+    setupCropCanvas();
+  } else {
+    img.onload = setupCropCanvas;
+  }
+}
+
+function drawCropRect(left, top, right, bottom) {
+  const canvas = document.getElementById('crop-canvas');
+  const ctx = canvas.getContext('2d');
+  const cw = canvas.width, ch = canvas.height;
+
+  ctx.clearRect(0, 0, cw, ch);
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.fillRect(0, 0, cw, ch);
+
+  const x = left * cw, y = top * ch, rw = (right - left) * cw, rh = (bottom - top) * ch;
+  ctx.clearRect(x, y, rw, rh);
+
+  ctx.strokeStyle = '#fbd024';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(x, y, rw, rh);
+
+  // 8 handles: corners (proportional) + edge midpoints (single-axis)
+  const HS = 5;
+  const mx = (left + right) / 2 * cw, my = (top + bottom) / 2 * ch;
+  [
+    [x,       y      ], [mx,       y      ], [right * cw, y      ],
+    [x,       my     ],                       [right * cw, my     ],
+    [x,       bottom * ch], [mx, bottom * ch], [right * cw, bottom * ch],
+  ].forEach(([hx, hy]) => {
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(hx - HS, hy - HS, HS * 2, HS * 2);
+    ctx.strokeStyle = '#1a3a5c';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(hx - HS, hy - HS, HS * 2, HS * 2);
+  });
+}
+
+function setupCropCanvas() {
+  const img = document.getElementById('crop-page-img');
+  const canvas = document.getElementById('crop-canvas');
+  if (!_cropState.baseW) _cropState.baseW = img.offsetWidth;
+  canvas.width = img.offsetWidth;
+  canvas.height = img.offsetHeight;
+
+  if (_cropState.sel) drawCropRect(_cropState.sel.left, _cropState.sel.top, _cropState.sel.right, _cropState.sel.bottom);
+
+  let mode = null; // null | 'draw' | 'move' | 'resize' | 'pan'
+  let activeHandle = null;
+  let moveOfsX = 0, moveOfsY = 0;
+  let panStartX = 0, panStartY = 0, panScrollLeft = 0, panScrollTop = 0;
+  const HIT = 10;
+
+  function pct(e) {
+    const r = canvas.getBoundingClientRect();
+    return {
+      px: e.clientX - r.left,
+      py: e.clientY - r.top,
+      x: Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)),
+      y: Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)),
+    };
+  }
+
+  function getHandles() {
+    const s = _cropState.sel;
+    if (!s) return [];
+    const cw = canvas.width, ch = canvas.height;
+    const mx = (s.left + s.right) / 2, my = (s.top + s.bottom) / 2;
+    return [
+      { id: 'tl', x: s.left,  y: s.top,    cursor: 'nwse-resize' },
+      { id: 'tc', x: mx,      y: s.top,    cursor: 'ns-resize'   },
+      { id: 'tr', x: s.right, y: s.top,    cursor: 'nesw-resize' },
+      { id: 'ml', x: s.left,  y: my,       cursor: 'ew-resize'   },
+      { id: 'mr', x: s.right, y: my,       cursor: 'ew-resize'   },
+      { id: 'bl', x: s.left,  y: s.bottom, cursor: 'nesw-resize' },
+      { id: 'bc', x: mx,      y: s.bottom, cursor: 'ns-resize'   },
+      { id: 'br', x: s.right, y: s.bottom, cursor: 'nwse-resize' },
+    ].map(h => ({ ...h, px: h.x * cw, py: h.y * ch }));
+  }
+
+  function hitHandle(px, py) {
+    return getHandles().find(h => Math.abs(px - h.px) <= HIT && Math.abs(py - h.py) <= HIT) || null;
+  }
+
+  function isInsideSel(px, py) {
+    const s = _cropState.sel;
+    if (!s || hitHandle(px, py)) return false;
+    const cw = canvas.width, ch = canvas.height;
+    return px > s.left * cw && px < s.right * cw && py > s.top * ch && py < s.bottom * ch;
+  }
+
+  canvas.onmousemove = (e) => {
+    if (mode === 'pan') {
+      const scrollEl = document.querySelector('.crop-scroll');
+      scrollEl.scrollLeft = panScrollLeft - (e.clientX - panStartX);
+      scrollEl.scrollTop  = panScrollTop  - (e.clientY - panStartY);
+      return;
+    }
+    const { px, py, x, y } = pct(e);
+    if (mode === 'draw') {
+      drawCropRect(Math.min(_cropState.sx, x), Math.min(_cropState.sy, y),
+                   Math.max(_cropState.sx, x), Math.max(_cropState.sy, y));
+    } else if (mode === 'move') {
+      const s = _cropState.sel;
+      const w = s.right - s.left, h = s.bottom - s.top;
+      const nl = Math.max(0, Math.min(1 - w, x - moveOfsX));
+      const nt = Math.max(0, Math.min(1 - h, y - moveOfsY));
+      _cropState.sel = { left: nl, top: nt, right: nl + w, bottom: nt + h };
+      drawCropRect(nl, nt, nl + w, nt + h);
+    } else if (mode === 'resize') {
+      let { left, top, right, bottom } = _cropState.sel;
+      const { id } = activeHandle;
+      switch (id) {
+        case 'tl': left  = Math.max(0, Math.min(right  - 0.02, x)); top    = Math.max(0, Math.min(bottom - 0.02, y)); break;
+        case 'tr': right = Math.min(1, Math.max(left   + 0.02, x)); top    = Math.max(0, Math.min(bottom - 0.02, y)); break;
+        case 'bl': left  = Math.max(0, Math.min(right  - 0.02, x)); bottom = Math.min(1, Math.max(top    + 0.02, y)); break;
+        case 'br': right = Math.min(1, Math.max(left   + 0.02, x)); bottom = Math.min(1, Math.max(top    + 0.02, y)); break;
+        case 'tc': top    = Math.max(0, Math.min(bottom - 0.02, y)); break;
+        case 'bc': bottom = Math.min(1, Math.max(top    + 0.02, y)); break;
+        case 'ml': left   = Math.max(0, Math.min(right  - 0.02, x)); break;
+        case 'mr': right  = Math.min(1, Math.max(left   + 0.02, x)); break;
+      }
+      _cropState.sel = { left, top, right, bottom };
+      drawCropRect(left, top, right, bottom);
+    } else {
+      // Handles always take priority over panMode
+      const h = hitHandle(px, py);
+      if (h) { canvas.style.cursor = h.cursor; return; }
+      if (isInsideSel(px, py)) { canvas.style.cursor = 'grab'; return; }
+      canvas.style.cursor = _cropState.panMode ? 'grab' : 'crosshair';
+    }
+  };
+
+  canvas.onmousedown = (e) => {
+    const { px, py, x, y } = pct(e);
+    const h = hitHandle(px, py);
+    if (h) {
+      // Handles always win, even in panMode
+      mode = 'resize'; activeHandle = h;
+      canvas.style.cursor = h.cursor;
+    } else if (isInsideSel(px, py)) {
+      // Interior of selection: move in both modes
+      mode = 'move';
+      moveOfsX = x - _cropState.sel.left;
+      moveOfsY = y - _cropState.sel.top;
+      canvas.style.cursor = 'grabbing';
+    } else if (_cropState.panMode) {
+      // Empty space + panMode: pan the canvas
+      mode = 'pan';
+      panStartX = e.clientX; panStartY = e.clientY;
+      const scrollEl = document.querySelector('.crop-scroll');
+      panScrollLeft = scrollEl.scrollLeft; panScrollTop = scrollEl.scrollTop;
+      canvas.style.cursor = 'grabbing';
+    } else {
+      mode = 'draw';
+      _cropState.sx = x; _cropState.sy = y; _cropState.ex = x; _cropState.ey = y;
+    }
+    e.preventDefault();
+  };
+
+  canvas.onmouseup = (e) => {
+    if (mode === 'pan') {
+      mode = null;
+      canvas.style.cursor = 'grab';
+      return;
+    }
+    const { px, py, x, y } = pct(e);
+    if (mode === 'draw') {
+      _cropState.sel = {
+        left: Math.min(_cropState.sx, x), top: Math.min(_cropState.sy, y),
+        right: Math.max(_cropState.sx, x), bottom: Math.max(_cropState.sy, y),
+      };
+    }
+    mode = null; activeHandle = null;
+    const h = hitHandle(px, py);
+    canvas.style.cursor = h ? h.cursor : (isInsideSel(px, py) ? 'grab' : 'crosshair');
+  };
+
+  canvas.onmouseleave = (e) => { if (mode) canvas.onmouseup(e); };
+}
+
+async function _persistCropSel() {
+  const { annId, page, sel } = _cropState;
+  if (!sel || (sel.right - sel.left) < 0.01 || (sel.bottom - sel.top) < 0.01) return false;
+  const res = await fetch(`/api/manual-crop/${parishId}/${dateStr}/${annId}`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ page, top: sel.top, left: sel.left, bottom: sel.bottom, right: sel.right }),
+  });
+  return res.ok;
+}
+
+async function saveManualCrop() {
+  const { annId, sel } = _cropState;
+  if (!annId || !sel) { showToast('Selecione uma área primeiro.', true); return; }
+  if ((sel.right - sel.left) < 0.01 || (sel.bottom - sel.top) < 0.01) {
+    showToast('Área muito pequena. Arraste para selecionar uma região maior.', true);
+    return;
+  }
+  const ok = await _persistCropSel();
+  closeModal('crop-modal');
+  if (ok) {
+    showToast('Marcação salva. Clique em "Gerar Novamente" para aplicar.');
+    if (_sourceView[annId]) {
+      const imgEl = document.getElementById(`img-${annId}`);
+      if (imgEl) imgEl.src = `/api/source-crop/${parishId}/${dateStr}/${annId}?t=${Date.now()}`;
+    }
+  } else {
+    showToast('Erro ao salvar marcação.', true);
+  }
+}
+
+async function clearManualCrop() {
+  const { annId } = _cropState;
+  if (!annId) return;
+  const res = await fetch(`/api/manual-crop/${parishId}/${dateStr}/${annId}`, { method: 'DELETE' });
+  if (res.ok) {
+    _cropState.sel = null;
+    const canvas = document.getElementById('crop-canvas');
+    if (canvas) canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+    showToast('Marcação removida. O agente irá re-localizar automaticamente.');
+  } else {
+    showToast('Erro ao remover marcação.', true);
+  }
+}
+
+async function regenFromCrop() {
+  const { annId, sel } = _cropState;
+  if (!annId) return;
+
+  // Save selection before showing popup
+  if (sel && (sel.right - sel.left) >= 0.01 && (sel.bottom - sel.top) >= 0.01) {
+    await _persistCropSel();
+  }
+
+  // Show confirmation popup asking about texts
+  document.getElementById('update-texts-modal').classList.add('open');
+}
+
+async function _doRegenFromCrop(updateTexts) {
+  document.getElementById('update-texts-modal').classList.remove('open');
+
+  const { annId } = _cropState;
+  if (!annId) return;
+
+  const btn = document.getElementById('crop-regen-btn');
+  const statusEl = document.getElementById('crop-regen-status');
+  const setSaving = (saving) => {
+    if (btn) btn.style.display = saving ? 'none' : '';
+    if (statusEl) statusEl.style.display = saving ? 'flex' : 'none';
+  };
+
+  setSaving(true);
+
+  const res = await fetch(`/api/regen/image/${parishId}/${dateStr}/${annId}`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ instruction: '' }),
+  });
+  const { job_id } = await res.json();
+
+  const poll = async () => {
+    const job = await fetch(`/api/regen/status/${job_id}`)
+      .then(r => { if (!r.ok) return null; return r.json(); })
+      .catch(() => null);
+    if (!job) { setSaving(false); return; }
+    if (job.status === 'done') {
+      setSaving(false);
+      if (statusEl) statusEl.textContent = '';
+      closeModal('crop-modal');
+      resetRegenArea(annId, 'image');
+      if (_sourceView[annId]) toggleSourceImage(annId);
+      const newUrl = `/api/image/${parishId}/${dateStr}/${annId}?t=${Date.now()}`;
+      if (job.has_backup) {
+        showImageComparison(annId, newUrl);
+      } else {
+        const imgEl = document.getElementById(`img-${annId}`);
+        if (imgEl) imgEl.src = newUrl;
+        showToast('Imagem gerada com sucesso!');
+      }
+      if (updateTexts) {
+        if (job.has_backup) {
+          showHtmlComparisonPending(annId);
+        }
+        fetch(`/api/regen/content/${parishId}/${dateStr}/${annId}`, {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ instruction: '', use_crop: true }),
+        }).then(r => r.json()).then(({ job_id }) => pollRegen(job_id, annId, 'content'));
+        if (!job.has_backup) showToast('Atualizando textos em segundo plano...');
+      }
+    } else if (job.status === 'error') {
+      setSaving(false);
+      if (statusEl) statusEl.textContent = '✗ Erro';
+      showToast(`Erro: ${job.detail}`, true);
+    } else {
+      if (statusEl) statusEl.textContent = job.detail || 'Processando...';
+      setTimeout(poll, 3000);
+    }
+  };
+  poll();
+}
+
+// --- Comparison modal helpers ---
+
+function _resetCompareState() {
+  _compareState.annId = null;
+  _compareState.hasImage = false; _compareState.imageChoice = 'new';
+  _compareState.hasHtml = false;  _compareState.htmlChoice = 'new';
+  _compareState.pendingNewHtml = null;
+}
+
+function selectImageChoice(choice) {
+  _compareState.imageChoice = choice;
+  const oldWrap = document.getElementById('cmp-img-old');
+  const newWrap = document.getElementById('cmp-img-new');
+  const oldImg  = document.getElementById('compare-old-img');
+  const newImg  = document.getElementById('compare-new-img');
+  if (choice === 'old') {
+    if (oldWrap) oldWrap.style.opacity = '1';
+    if (newWrap) newWrap.style.opacity = '.45';
+    if (oldImg)  oldImg.style.outline  = '3px solid #fbd024';
+    if (newImg)  newImg.style.outline  = '2px solid transparent';
+  } else {
+    if (newWrap) newWrap.style.opacity = '1';
+    if (oldWrap) oldWrap.style.opacity = '.45';
+    if (newImg)  newImg.style.outline  = '3px solid #fbd024';
+    if (oldImg)  oldImg.style.outline  = '2px solid transparent';
+  }
+}
+
+function selectHtmlChoice(choice) {
+  _compareState.htmlChoice = choice;
+  const oldWrap  = document.getElementById('cmp-html-old');
+  const newWrap  = document.getElementById('cmp-html-new');
+  const oldFrame = document.getElementById('compare-old-html');
+  const newFrame = document.getElementById('compare-new-html');
+  if (choice === 'old') {
+    if (oldWrap)  oldWrap.style.opacity  = '1';
+    if (newWrap)  newWrap.style.opacity  = '.45';
+    if (oldFrame) oldFrame.style.border  = '2px solid #fbd024';
+    if (newFrame) newFrame.style.border  = '1px solid #e8ecf0';
+  } else {
+    if (newWrap)  newWrap.style.opacity  = '1';
+    if (oldWrap)  oldWrap.style.opacity  = '.45';
+    if (newFrame) newFrame.style.border  = '2px solid #fbd024';
+    if (oldFrame) oldFrame.style.border  = '1px solid #e8ecf0';
+  }
+}
+
+function closeCompareModal() {
+  closeModal('compare-modal');
+  _resetCompareState();
+}
+
+async function confirmComparison() {
+  const { annId, hasImage, imageChoice, hasHtml, htmlChoice, pendingNewHtml } = _compareState;
+  if (!annId) return;
+
+  const confirmBtn = document.querySelector('#compare-modal .btn-primary');
+  if (confirmBtn) confirmBtn.disabled = true;
+
+  if (hasImage) {
+    if (imageChoice === 'new') {
+      fetch(`/api/image-backup/${parishId}/${dateStr}/${annId}`, { method: 'DELETE' });
+      const imgEl = document.getElementById(`img-${annId}`);
+      if (imgEl) imgEl.src = `/api/image/${parishId}/${dateStr}/${annId}?t=${Date.now()}`;
+    } else {
+      await fetch(`/api/restore-image/${parishId}/${dateStr}/${annId}`, { method: 'POST' });
+      const imgEl = document.getElementById(`img-${annId}`);
+      if (imgEl) imgEl.src = `/api/image/${parishId}/${dateStr}/${annId}?t=${Date.now()}`;
+    }
+  }
+
+  if (hasHtml) {
+    if (htmlChoice === 'new') {
+      fetch(`/api/html-backup/${parishId}/${dateStr}/${annId}`, { method: 'DELETE' });
+      if (pendingNewHtml) {
+        const ann = allAnnouncements.find(a => String(a.id) === String(annId));
+        if (ann) {
+          ann.html_content = pendingNewHtml;
+          const editor = document.getElementById(`editor-${annId}`);
+          if (editor) editor.value = pendingNewHtml;
+          refreshPreview(annId);
+        }
+      }
+    } else {
+      const res = await fetch(`/api/restore-html/${parishId}/${dateStr}/${annId}`, { method: 'POST' });
+      const data = await res.json();
+      if (data.html) {
+        const ann = allAnnouncements.find(a => String(a.id) === String(annId));
+        if (ann) {
+          ann.html_content = data.html;
+          const editor = document.getElementById(`editor-${annId}`);
+          if (editor) editor.value = data.html;
+          refreshPreview(annId);
+        }
+      }
+    }
+  }
+
+  const imgMsg  = hasImage ? (imageChoice === 'new' ? 'nova imagem' : 'imagem anterior') : null;
+  const htmlMsg = hasHtml  ? (htmlChoice  === 'new' ? 'novo texto'  : 'texto anterior')  : null;
+  const parts   = [imgMsg, htmlMsg].filter(Boolean);
+  showToast(`Seleção aplicada: ${parts.join(' + ')}.`);
+
+  closeCompareModal();
+}
+
+function showImageComparison(annId, newUrl) {
+  _compareState.annId = annId;
+  _compareState.hasImage = true;
+  _compareState.imageChoice = 'new';
+  document.getElementById('compare-old-img').src = `/api/image-backup/${parishId}/${dateStr}/${annId}?t=${Date.now()}`;
+  document.getElementById('compare-new-img').src = newUrl;
+  document.getElementById('compare-image-section').style.display = '';
+  document.getElementById('compare-html-section').style.display = 'none';
+  document.getElementById('compare-html-divider').style.display = 'none';
+  // Apply default visual state: new selected
+  selectImageChoice('new');
+  document.getElementById('compare-modal').classList.add('open');
+}
+
+function showHtmlComparisonPending(annId) {
+  _compareState.annId = annId;
+  _compareState.hasHtml = true;
+  _compareState.htmlChoice = 'new';
+  document.getElementById('compare-html-pending').style.display = 'flex';
+  document.getElementById('compare-html-content').style.display = 'none';
+  document.getElementById('compare-html-divider').style.display = '';
+  document.getElementById('compare-html-section').style.display = '';
+  document.getElementById('compare-modal').classList.add('open');
+}
+
+function populateHtmlComparison(annId, oldHtml, newHtml) {
+  _compareState.annId = annId;
+  _compareState.hasHtml = true;
+  _compareState.htmlChoice = 'new';
+  _compareState.pendingNewHtml = newHtml;
+
+  const oldFrame = document.getElementById('compare-old-html');
+  const newFrame = document.getElementById('compare-new-html');
+  setFrame(oldFrame, getLangContent(oldHtml, 'en'));
+  setFrame(newFrame, getLangContent(newHtml, 'en'));
+
+  document.getElementById('compare-html-pending').style.display = 'none';
+  document.getElementById('compare-html-content').style.display = '';
+  document.getElementById('compare-html-divider').style.display = '';
+  document.getElementById('compare-html-section').style.display = '';
+
+  // Apply default visual state: new selected
+  selectHtmlChoice('new');
+
+  if (!_compareState.hasImage) {
+    document.getElementById('compare-image-section').style.display = 'none';
+  }
+  document.getElementById('compare-modal').classList.add('open');
 }
 
 init();

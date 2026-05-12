@@ -13,9 +13,20 @@ load_dotenv()
 
 PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
 EXAMPLES_DIR = Path(__file__).parent.parent.parent / "config" / "parishes"
+CONFIG_DIR = Path(__file__).parent.parent.parent / "config" / "parishes"
 
-# Páginas de interesse (1-indexed)
-BULLETIN_PAGES = [7, 8, 9, 10]
+DEFAULT_BULLETIN_PAGES = [7, 8, 9, 10]
+
+
+def _load_bulletin_pages(parish_id: str) -> list[int]:
+    import yaml
+    config_path = CONFIG_DIR / f"{parish_id}.yaml"
+    if config_path.exists():
+        cfg = yaml.safe_load(config_path.read_text()) or {}
+        pages = cfg.get("reader", {}).get("bulletin_pages")
+        if pages:
+            return list(pages)
+    return DEFAULT_BULLETIN_PAGES
 
 
 def extract_pages_as_images(pdf_path: Path, pages: list[int], output_dir: Path) -> list[bytes]:
@@ -66,11 +77,10 @@ def load_examples(parish_id: str) -> list[dict]:
     return examples
 
 
-def build_messages(page_images: list[bytes], examples: list[dict]) -> list[dict]:
+def build_messages(page_images: list[bytes], examples: list[dict], bulletin_pages: list[int]) -> list[dict]:
     """Monta o payload de mensagens para a API do Claude."""
     content = []
 
-    # Adiciona exemplos de referência se existirem
     today = __import__("datetime").date.today().isoformat()
 
     if examples:
@@ -94,14 +104,13 @@ def build_messages(page_images: list[bytes], examples: list[dict]) -> list[dict]
     else:
         content.append({
             "type": "text",
-            "text": f"Today's date is {today}. Analyze the following {len(page_images)} bulletin pages (pages {BULLETIN_PAGES}) and extract all announcements. Ignore any event whose date has already passed."
+            "text": f"Today's date is {today}. Analyze the following {len(page_images)} bulletin pages (pages {bulletin_pages}) and extract all announcements. Ignore any event whose date has already passed."
         })
 
-    # Adiciona as páginas do boletim atual
     for i, img_bytes in enumerate(page_images):
         content.append({
             "type": "text",
-            "text": f"Page {BULLETIN_PAGES[i]}:"
+            "text": f"Page {bulletin_pages[i]}:"
         })
         content.append({
             "type": "image",
@@ -137,10 +146,11 @@ async def run(pdf_path: Path, parish_id: str, instruction: str = "") -> list[dic
     if instruction.strip():
         system_prompt += f"\n\nADDITIONAL INSTRUCTION FOR THIS RUN:\n{instruction.strip()}"
 
+    bulletin_pages = _load_bulletin_pages(parish_id)
     output_dir = pdf_path.parent
-    page_images = extract_pages_as_images(pdf_path, BULLETIN_PAGES, output_dir)
+    page_images = extract_pages_as_images(pdf_path, bulletin_pages, output_dir)
     examples = load_examples(parish_id)
-    messages = build_messages(page_images, examples)
+    messages = build_messages(page_images, examples, bulletin_pages)
 
     print("Enviando para Claude API...")
     response = client.messages.create(
