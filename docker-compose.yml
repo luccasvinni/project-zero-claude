@@ -11,4 +11,6 @@ services:
       - ./output:/app/output
       # Persiste os feedbacks acumulados dos agentes
       - ./config:/app/config
+      # Persiste o código fonte
+      - ./src:/app/src
     restart: unless-stopped
