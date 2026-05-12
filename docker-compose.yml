@@ -1,0 +1,14 @@
+services:
+  app:
+    build: .
+    container_name: bulletin-pipeline
+    ports:
+      - "8502:8502"
+    env_file:
+      - .env
+    volumes:
+      # Persiste os outputs (PDFs, imagens, HTMLs gerados) entre reinicializações
+      - ./output:/app/output
+      # Persiste os feedbacks acumulados dos agentes
+      - ./config:/app/config
+    restart: unless-stopped

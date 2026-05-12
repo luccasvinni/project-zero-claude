@@ -1,5 +1,6 @@
 # LLM
 anthropic>=0.30.0
+google-genai>=1.0.0
 
 # Web scraping
 playwright>=1.44.0
@@ -11,8 +12,12 @@ pdfplumber>=0.11.0
 pdf2image>=1.17.0
 Pillow>=10.3.0
 
-# Image generation
-openai>=1.35.0
+# QR code reading
+pyzbar>=0.1.9
+
+# Backend API
+fastapi>=0.111.0
+uvicorn>=0.30.0
 
 # HTML templating
 Jinja2>=3.1.4
@@ -20,11 +25,8 @@ Jinja2>=3.1.4
 # Data validation
 pydantic>=2.7.0
 
-# Dashboard
-streamlit>=1.35.0
-
-# QR code reading
-pyzbar>=0.1.9
+# Config
+PyYAML>=6.0.0
 
 # Utilities
 python-dotenv>=1.0.0
