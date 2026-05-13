@@ -47,6 +47,7 @@ async def _run_image_edit(job_id: str, parish_id: str, date: str, ann_id: str, p
         sys.path.insert(0, str(Path(__file__).parent.parent / "agents"))
         from agent4a_image import (
             locate_announcements, crop_announcement,
+            extract_announcement_json, build_prompt_from_json,
             generate_image_with_gemini, resize_to_canvas, OUTPUT_SIZE,
             load_parish_logo, composite_logo,
         )
@@ -58,7 +59,7 @@ async def _run_image_edit(job_id: str, parish_id: str, date: str, ann_id: str, p
         if not ann:
             raise ValueError("Anúncio não encontrado")
 
-        ann["_edit_request"] = prompt
+        anthropic_client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
         gemini_client = _genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
         pages_dir = run_dir / "pages"
 
@@ -69,17 +70,24 @@ async def _run_image_edit(job_id: str, parish_id: str, date: str, ann_id: str, p
             locations = json.loads(locations_cache.read_text())
             location = locations.get(ann_id)
         else:
-            anthropic_client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
             locations = locate_announcements(anthropic_client, pages_dir, [ann])
             location = locations.get(ann_id)
 
         if not location:
             raise ValueError("Não foi possível localizar o anúncio na página")
 
-        # Step 2 — generate
+        # Step 2 — extract JSON + build prompt + generate
+        is_manual = location.get("manual", False)
+        step("generating", "Extraindo dados da imagem (Agent 1)...")
+        crop = crop_announcement(pages_dir, location, padding=0 if is_manual else 12)
+        ann_json = extract_announcement_json(anthropic_client, crop)
+        ann_json["_edit_request"] = prompt
+        if is_manual:
+            ann_json["_strict_crop"] = True
+        final_prompt = build_prompt_from_json(ann_json)
+
         step("generating", "Gerando nova imagem com IA...")
-        crop = crop_announcement(pages_dir, location)
-        generated = generate_image_with_gemini(gemini_client, crop, ann)
+        generated = generate_image_with_gemini(gemini_client, crop, final_prompt)
         if generated is None:
             generated = crop
 
@@ -112,8 +120,9 @@ async def _run_regen_image(job_id: str, parish_id: str, date: str, ann_id: str, 
         sys.path.insert(0, str(Path(__file__).parent.parent / "agents"))
         from agent4a_image import (
             locate_announcements, crop_announcement,
+            extract_announcement_json, build_prompt_from_json,
             generate_image_with_gemini, resize_to_canvas, OUTPUT_SIZE,
-            load_agent_feedback, load_parish_logo, composite_logo,
+            load_parish_logo, composite_logo,
         )
         from google import genai as _genai
 
@@ -123,13 +132,7 @@ async def _run_regen_image(job_id: str, parish_id: str, date: str, ann_id: str, 
         if not ann:
             raise ValueError("Anúncio não encontrado")
 
-        # General feedback always applied; pontual instruction overrides _edit_request
-        feedback = load_agent_feedback(parish_id, "image")
-        if feedback:
-            ann["_parish_feedback"] = feedback
-        if instruction:
-            ann["_edit_request"] = instruction
-
+        anthropic_client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
         gemini_client = _genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
         pages_dir = run_dir / "pages"
 
@@ -139,16 +142,24 @@ async def _run_regen_image(job_id: str, parish_id: str, date: str, ann_id: str, 
             locations = json.loads(locations_cache.read_text())
             location = locations.get(ann_id)
         else:
-            anthropic_client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
             locations = locate_announcements(anthropic_client, pages_dir, [ann])
             location = locations.get(ann_id)
 
         if not location:
             raise ValueError("Não foi possível localizar o anúncio")
 
+        is_manual = location.get("manual", False)
+        step("generating", "Extraindo dados da imagem (Agent 1)...")
+        crop = crop_announcement(pages_dir, location, padding=0 if is_manual else 12)
+        ann_json = extract_announcement_json(anthropic_client, crop)
+        if instruction:
+            ann_json["_edit_request"] = instruction
+        if is_manual:
+            ann_json["_strict_crop"] = True
+        final_prompt = build_prompt_from_json(ann_json)
+
         step("generating", "Gerando nova imagem com IA...")
-        crop = crop_announcement(pages_dir, location)
-        generated = generate_image_with_gemini(gemini_client, crop, ann)
+        generated = generate_image_with_gemini(gemini_client, crop, final_prompt)
         if generated is None:
             generated = crop
 

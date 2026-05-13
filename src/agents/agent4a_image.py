@@ -5,8 +5,6 @@ import json
 import os
 from pathlib import Path
 
-import re
-
 import anthropic
 from google import genai
 from google.genai import types
@@ -17,6 +15,35 @@ load_dotenv()
 
 OUTPUT_SIZE = (1080, 1350)
 PAGES_RANGE = [7, 8, 9, 10]
+
+EXTRACTION_SYSTEM_PROMPT = """You are a precise data extraction agent. Read the provided announcement image and extract specific information into a structured JSON object.
+
+Extract the following fields:
+- "titulo": event title exactly as it appears in the image (required)
+- "tipo_evento": classify into exactly one of: "feminine_retreat", "sacramental", "volunteer", "prayer", "saints", "matrimonial", "ministry", "other"
+- "data": event date formatted as "Month Day, Year" (e.g. "May 19, 2026") — omit if not present
+- "hora": event time formatted as "00:00am/pm" (e.g. "7:00pm") — omit if not present
+- "local": event location exactly as it appears in the image — omit if not present
+- "descricao": short description of the event, max 60 characters, only if explicitly present in the image — omit if not present
+- "emails": array of email addresses exactly as they appear — omit if not present
+- "telefones": array of phone numbers exactly as they appear — omit if not present
+- "websites": array of URLs/websites exactly as they appear — omit if not present
+
+Rules:
+- Return ONLY a valid JSON object, no explanation or markdown fences
+- Omit any field that is not present in the image — never invent or assume information
+- For arrays (emails, telefones, websites), include all instances found"""
+
+EVENT_STYLE_MAP = {
+    "feminine_retreat": "Soft, elegant palettes — delicate florals, warm light, refined typography. Convey grace, intimacy, and spiritual femininity.",
+    "sacramental": "Sober, classic tones — use recognizable and spiritually meaningful iconography. Avoid generic imagery; every visual element must carry liturgical weight.",
+    "volunteer": "Vibrant, warm colors with a strong sense of community. Show people actively engaged and welcomed. Energetic yet approachable.",
+    "prayer": "Sacred atmosphere — use elements such as a lit monstrance, candles, and sacred penumbra. Avoid flat or spiritually shallow imagery; convey depth and reverence.",
+    "saints": "Include recognizable iconography of the saint — traditional or historical depictions. Reverent and timeless aesthetic.",
+    "matrimonial": "Represent couples in a liturgical context — altar, candles, rings. Elegant, solemn, and tender.",
+    "ministry": "Show people actively engaged in the liturgy — community, service, and devotion. Warm and inviting.",
+    "other": "Clean, professional, and welcoming. Use contextual visual elements that match the specific theme of the event.",
+}
 
 
 def encode_image(img_path: Path) -> str:
@@ -89,14 +116,13 @@ def locate_announcements(client: anthropic.Anthropic, pages_dir: Path, announcem
     return {str(item["id"]): item for item in locations}
 
 
-def crop_announcement(pages_dir: Path, location: dict) -> Image.Image:
+def crop_announcement(pages_dir: Path, location: dict, padding: int = 12) -> Image.Image:
     """Recorta a região do anúncio da página com padding."""
     page_num = location["page"]
     img_path = pages_dir / f"page_{page_num:02d}.png"
     page_img = Image.open(img_path).convert("RGB")
     w, h = page_img.size
 
-    padding = 12
     top = max(0, int(location["top"] * h) - padding)
     left = max(0, int(location["left"] * w) - padding)
     bottom = min(h, int(location["bottom"] * h) + padding)
@@ -150,55 +176,89 @@ def load_agent_feedback(parish_id: str, feedback_type: str) -> str:
     return "\n".join(lines)
 
 
-def build_gemini_prompt(announcement: dict) -> str:
-    info_lines = [f'- "{announcement["title"]}" (large headline, keep prominent)']
+def extract_announcement_json(client: anthropic.Anthropic, crop: Image.Image) -> dict:
+    """Agent 1: Claude Vision reads the crop and extracts structured JSON."""
+    buf = io.BytesIO()
+    crop.save(buf, format="PNG")
+    img_b64 = base64.standard_b64encode(buf.getvalue()).decode()
 
-    if announcement.get("event_date"):
-        info_lines.append(f'- Date: {announcement["event_date"]}')
-    if announcement.get("location"):
-        info_lines.append(f'- Location: {announcement["location"]}')
+    response = client.messages.create(
+        model="claude-opus-4-5",
+        max_tokens=1024,
+        system=EXTRACTION_SYSTEM_PROMPT,
+        messages=[{
+            "role": "user",
+            "content": [
+                {
+                    "type": "image",
+                    "source": {"type": "base64", "media_type": "image/png", "data": img_b64},
+                },
+                {"type": "text", "text": "Extract the announcement data from this image."},
+            ],
+        }],
+    )
 
-    body = announcement.get("body", "")
-    emails = re.findall(r'[\w.+-]+@[\w-]+\.[a-zA-Z]{2,}', body)
-    phones = re.findall(r'\(?\d{3}\)?[\s.\-]?\d{3}[\s.\-]?\d{4}', body)
-    urls = re.findall(r'https?://[^\s,)\n]+|www\.[^\s,)\n]+', body)
+    raw = response.content[0].text.strip()
+    if raw.startswith("```"):
+        raw = raw.split("```")[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+        raw = raw.strip()
 
-    for e in emails[:2]:
-        info_lines.append(f'- Email: {e}')
-    for p in phones[:2]:
-        info_lines.append(f'- Phone: {p}')
-    for u in urls[:2]:
-        info_lines.append(f'- Website: {u}')
+    return json.loads(raw)
 
-    info_block = "\n".join(info_lines)
 
-    feedback = announcement.get("_parish_feedback", "")
-    feedback_block = f"\n\nPREVIOUS FEEDBACK TO APPLY:\n{feedback}" if feedback else ""
+def build_prompt_from_json(data: dict) -> str:
+    """Agent 2: builds the final Gemini prompt by injecting JSON data into the template."""
+    template = (Path(__file__).parent.parent / "prompts" / "prompt_final.txt").read_text(encoding="utf-8")
 
-    return f"""You are a professional graphic designer creating a social media post.{feedback_block}
+    lines = [
+        "[TEXT DATA TO RENDER - EXACT STRINGS ONLY]",
+        "The labels below (TITLE, DESCRIPTION, DATE, TIME, LOCATION, CONTACT, WEBSITE) are structural hints for layout placement only — do NOT render them as visible text in the image. Render ONLY the quoted string values. Each value must appear EXACTLY ONCE in the final image — never repeat any text, date, time, location, contact, or link anywhere.",
+    ]
 
-Redesign the attached announcement image into a clean, professional VERTICAL portrait flyer (4:5 ratio, taller than wide — like an Instagram post or story).
+    if data.get("titulo"):
+        lines.append(f'- TITLE: "{data["titulo"]}"')
+    if data.get("descricao"):
+        lines.append(f'- DESCRIPTION: "{data["descricao"]}"')
 
-PRESERVE from the original image:
-- All logos, emblems, and brand marks
-- All photos of people or places
-- The color scheme and visual style
-- Decorative elements and borders
+    data_val = data.get("data")
+    hora_val = data.get("hora")
+    if data_val and hora_val:
+        lines.append(f'- DATE & TIME: "{data_val} at {hora_val}"')
+    elif data_val:
+        lines.append(f'- DATE: "{data_val}"')
+    elif hora_val:
+        lines.append(f'- TIME: "{hora_val}"')
 
-SHOW ONLY this text content (remove all other text from the original):
-{info_block}
+    if data.get("local"):
+        lines.append(f'- LOCATION: "{data["local"]}"')
 
-DESIGN RULES:
-- Output must be vertical/portrait orientation (significantly taller than wide)
-- Layout must be clean, bold, and easy to read at a glance
-- Text hierarchy: title largest, then date/time, then location, then contacts
-- The result should look like a polished professional event flyer ready for social media
-- Never insert QR codes or barcodes of any kind
-- Always display dates in "Month Day, Year" format (e.g. "May 11, 2026")
-- Never repeat the same link, email, or phone number more than once
-- Never repeat the same logo or emblem more than once in the image
+    contatos = data.get("telefones", []) + data.get("emails", [])
+    if contatos:
+        lines.append(f'- CONTACT: "{" | ".join(contatos)}"')
 
-Do not add watermarks, signatures, or any text not listed above."""
+    for url in data.get("websites", []):
+        lines.append(f'- WEBSITE: "{url}"')
+
+    text_data_block = "\n".join(lines) + "\n\n"
+    style_block = EVENT_STYLE_MAP.get(data.get("tipo_evento", "other"), EVENT_STYLE_MAP["other"])
+
+    prompt = template.replace("{text_data_block}", text_data_block).replace("{style_block}", style_block)
+
+    if data.get("_strict_crop"):
+        prompt += (
+            "\n\n[MANUAL SELECTION — STRICT BOUNDS]\n"
+            "The reference image is an exact region manually selected by the user. "
+            "You must base the entire design EXCLUSIVELY on the content visible in that image. "
+            "Do not infer, add, or reference ANY element that is not explicitly present in this crop."
+        )
+
+    edit_request = data.get("_edit_request", "")
+    if edit_request:
+        prompt += f"\n\n[TARGETED EDIT]\nApply only this change, keep everything else intact:\n- {edit_request}"
+
+    return prompt
 
 
 def resize_to_canvas(img: Image.Image, size: tuple) -> Image.Image:
@@ -213,18 +273,11 @@ def resize_to_canvas(img: Image.Image, size: tuple) -> Image.Image:
     return resized.crop((x, y, x + cw, y + ch))
 
 
-def generate_image_with_gemini(gemini_client: genai.Client, crop: Image.Image, announcement: dict) -> Image.Image | None:
-    """Envia apenas o recorte isolado do anúncio ao Gemini."""
+def generate_image_with_gemini(gemini_client: genai.Client, crop: Image.Image, prompt: str) -> Image.Image | None:
+    """Image-to-image via Gemini 3.1 Flash Image Preview."""
     buf = io.BytesIO()
     crop.save(buf, format="PNG")
     img_bytes = buf.getvalue()
-
-    base_prompt = build_gemini_prompt(announcement)
-    prompt = base_prompt + (
-        "\n\nNOTE: The provided image contains ONLY this specific announcement, "
-        "already cropped and isolated. Use ALL visual elements from it (logos, photos, "
-        "colors, decorative elements) — do not invent or import any external elements."
-    )
 
     try:
         response = gemini_client.models.generate_content(
@@ -261,12 +314,6 @@ async def run(output_dir: Path, parish_id: str) -> dict[str, str]:
     announcements = json.loads(announcements_path.read_text())
     pages_dir = output_dir / "pages"
 
-    feedback = load_agent_feedback(parish_id, "image")
-    if feedback:
-        print(f"  Feedback anterior carregado ({len(feedback.splitlines())} instruções).")
-        for ann in announcements:
-            ann["_parish_feedback"] = feedback
-
     print("Localizando anúncios nas páginas (Claude)...")
     locations = locate_announcements(anthropic_client, pages_dir, announcements)
 
@@ -298,7 +345,15 @@ async def run(output_dir: Path, parish_id: str) -> dict[str, str]:
 
         crop = crop_announcement(pages_dir, location)
 
-        generated = generate_image_with_gemini(gemini_client, crop, ann)
+        # Agent 1: extract structured JSON from the crop
+        print(f"  Extraindo dados da imagem (Agent 1)...")
+        ann_json = extract_announcement_json(anthropic_client, crop)
+        print(f"  JSON extraído: {ann_json}")
+
+        # Agent 2: build final prompt from JSON + template
+        prompt = build_prompt_from_json(ann_json)
+
+        generated = generate_image_with_gemini(gemini_client, crop, prompt)
         using_placeholder = False
         if generated is None:
             if placeholder_img:

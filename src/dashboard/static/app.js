@@ -38,6 +38,7 @@ const _compareState = {
   hasHtml: false,  htmlChoice: 'new',
   pendingNewHtml: null,
   hasHtmlBackup: false, originalHtml: null,
+  imageInstruction: '', htmlInstruction: '',
 };
 
 // Map of parish_id -> [{parish_id, date}, ...]  (most recent first)
@@ -239,6 +240,10 @@ function cardHtml(ann) {
       ${ann.has_image
         ? `<img src="/api/image/${parishId}/${dateStr}/${id}?t=${_gridCacheBust}" id="img-${id}" alt="${escHtml(ann.title)}">`
         : `<div class="img-no-image">Imagem não gerada</div>`}
+      <div id="img-gen-overlay-${id}" style="position:absolute;inset:0;background:rgba(255,255,255,.88);display:none;flex-direction:column;align-items:center;justify-content:center;gap:.75rem;z-index:5;backdrop-filter:blur(2px)">
+        <img src="/static/icon-refresh.png" style="width:26px;height:26px;object-fit:contain;filter:brightness(0) invert(18%) sepia(55%) saturate(800%) hue-rotate(185deg) brightness(60%) contrast(95%);animation:spin .7s linear infinite">
+        <span id="img-gen-overlay-text-${id}" style="font-size:.9rem;font-weight:600;color:#1a3a5c">Gerando...</span>
+      </div>
     </div>
 
     ${ann.has_image ? `
@@ -316,7 +321,11 @@ function cardHtml(ann) {
         </div>
       </div>
 
-      <div class="preview-section">
+      <div class="preview-section" style="position:relative">
+        <div id="html-gen-overlay-${id}" style="position:absolute;inset:0;background:rgba(255,255,255,.88);display:none;flex-direction:column;align-items:center;justify-content:center;gap:.75rem;z-index:5;backdrop-filter:blur(2px);border-radius:4px">
+          <img src="/static/icon-refresh.png" style="width:26px;height:26px;object-fit:contain;filter:brightness(0) invert(18%) sepia(55%) saturate(800%) hue-rotate(185deg) brightness(60%) contrast(95%);animation:spin .7s linear infinite">
+          <span id="html-gen-overlay-text-${id}" style="font-size:.9rem;font-weight:600;color:#1a3a5c">Gerando...</span>
+        </div>
         <div class="preview-tabs">
           <div class="lang-tab-group">
             <button class="tab-btn active" id="tab-en-${id}" onclick="switchTab('${id}','en')" aria-label="Inglês (EN)"><span aria-hidden="true">🇺🇸</span> EN</button>
@@ -1023,7 +1032,12 @@ async function regenImage(id) {
   const btn = document.getElementById(`regen-image-btn-${id}`);
   if (statusEl) statusEl.textContent = 'Gerando...';
   if (btn) { btn.disabled = true; btn.classList.add('icon-spin'); }
+  const imgOverlay = document.getElementById(`img-gen-overlay-${id}`);
+  const imgOverlayText = document.getElementById(`img-gen-overlay-text-${id}`);
+  if (imgOverlayText) imgOverlayText.textContent = ann?.has_image ? 'Gerando nova imagem...' : 'Gerando...';
+  if (imgOverlay) imgOverlay.style.display = 'flex';
   const instruction = _pontualInstr[`${id}-image`] || '';
+  _compareState.imageInstruction = instruction;
   const res = await fetch(`/api/regen/image/${parishId}/${dateStr}/${id}`, {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
@@ -1043,7 +1057,12 @@ async function regenContent(id) {
   const btn = document.getElementById(`regen-content-btn-${id}`);
   if (statusEl) statusEl.textContent = 'Gerando...';
   if (btn) { btn.disabled = true; btn.classList.add('icon-spin'); }
+  const htmlOverlay = document.getElementById(`html-gen-overlay-${id}`);
+  const htmlOverlayText = document.getElementById(`html-gen-overlay-text-${id}`);
+  if (htmlOverlayText) htmlOverlayText.textContent = ann?.has_html ? 'Gerando novo texto...' : 'Gerando...';
+  if (htmlOverlay) htmlOverlay.style.display = 'flex';
   const instruction = _pontualInstr[`${id}-content`] || '';
+  _compareState.htmlInstruction = instruction;
   const res = await fetch(`/api/regen/content/${parishId}/${dateStr}/${id}`, {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
@@ -1108,6 +1127,8 @@ async function pollRegen(job_id, id, type) {
     if (statusEl) { statusEl.textContent = ''; }
     if (type === 'image') _clearActiveImageGen();
     if (type === 'content') _clearActiveContentGen();
+    const overlay0 = document.getElementById(type === 'image' ? `img-gen-overlay-${id}` : `html-gen-overlay-${id}`);
+    if (overlay0) overlay0.style.display = 'none';
     resetRegenArea(id, type);
     return;
   }
@@ -1115,6 +1136,8 @@ async function pollRegen(job_id, id, type) {
   if (job.status === 'done') {
     if (type === 'image') _clearActiveImageGen();
     if (type === 'content') _clearActiveContentGen();
+    const overlayDone = document.getElementById(type === 'image' ? `img-gen-overlay-${id}` : `html-gen-overlay-${id}`);
+    if (overlayDone) overlayDone.style.display = 'none';
     if (statusEl) { statusEl.textContent = '✓ Concluído'; setTimeout(() => { statusEl.textContent = ''; }, 3000); }
     if (regenBtn) { regenBtn.disabled = false; regenBtn.classList.remove('icon-spin'); }
     resetRegenArea(id, type);
@@ -1150,6 +1173,8 @@ async function pollRegen(job_id, id, type) {
   } else if (job.status === 'error') {
     if (type === 'image') _clearActiveImageGen();
     if (type === 'content') _clearActiveContentGen();
+    const overlayErr = document.getElementById(type === 'image' ? `img-gen-overlay-${id}` : `html-gen-overlay-${id}`);
+    if (overlayErr) overlayErr.style.display = 'none';
     if (statusEl) { statusEl.textContent = '✗ Erro'; setTimeout(() => { statusEl.textContent = ''; }, 4000); }
     if (regenBtn) { regenBtn.disabled = false; regenBtn.classList.remove('icon-spin'); }
     showToast(`Erro: ${job.detail}`, true);
@@ -1594,6 +1619,9 @@ function _resetCompareState() {
   _compareState.hasHtml = false;  _compareState.htmlChoice = 'new';
   _compareState.pendingNewHtml = null;
   _compareState.hasHtmlBackup = false; _compareState.originalHtml = null;
+  _compareState.imageInstruction = ''; _compareState.htmlInstruction = '';
+  const instrEl = document.getElementById('compare-instr');
+  if (instrEl) instrEl.value = '';
   const confirmBtn = document.querySelector('#compare-modal .btn-primary');
   if (confirmBtn) confirmBtn.disabled = false;
 }
@@ -1757,6 +1785,91 @@ function populateHtmlComparison(annId, oldHtml, newHtml, hasBackup = false) {
     document.getElementById('compare-image-section').style.display = 'none';
   }
   document.getElementById('compare-modal').classList.add('open');
+}
+
+async function regenFromComparison() {
+  const { annId, hasImage, hasHtml } = _compareState;
+  if (!annId) return;
+
+  const instrEl     = document.getElementById('compare-instr');
+  const instruction = instrEl?.value?.trim() || '';
+  const overlay     = document.getElementById('compare-regen-overlay');
+  const overlayText = document.getElementById('compare-regen-overlay-text');
+  const regenBtn    = document.getElementById('compare-regen-btn');
+  const confirmBtn  = document.querySelector('#compare-modal .btn-primary');
+  const cancelBtn   = document.getElementById('compare-cancel-btn');
+
+  if (overlay) overlay.style.display = 'flex';
+  if (overlayText) overlayText.textContent = 'Gerando...';
+  [regenBtn, confirmBtn, cancelBtn].forEach(b => { if (b) b.disabled = true; });
+
+  try {
+    if (hasImage) {
+      await fetch(`/api/restore-image/${parishId}/${dateStr}/${annId}`, { method: 'POST' });
+      const res = await fetch(`/api/regen/image/${parishId}/${dateStr}/${annId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ instruction }),
+      });
+      const { job_id } = await res.json();
+      await _pollRegenForModal(job_id, annId, 'image', overlayText);
+    }
+    if (hasHtml) {
+      if (_compareState.hasHtmlBackup) {
+        await fetch(`/api/restore-html/${parishId}/${dateStr}/${annId}`, { method: 'POST' });
+      }
+      const res = await fetch(`/api/regen/content/${parishId}/${dateStr}/${annId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ instruction }),
+      });
+      const { job_id } = await res.json();
+      await _pollRegenForModal(job_id, annId, 'content', overlayText);
+    }
+    if (instrEl) instrEl.value = '';
+  } catch (e) {
+    showToast(`Erro ao gerar novamente: ${e.message}`, true);
+  }
+
+  if (overlay) overlay.style.display = 'none';
+  [regenBtn, confirmBtn, cancelBtn].forEach(b => { if (b) b.disabled = false; });
+}
+
+async function _pollRegenForModal(job_id, annId, type, overlayText) {
+  while (true) {
+    const job = await fetch(`/api/regen/status/${job_id}`).then(r => r.json()).catch(() => null);
+    if (!job) throw new Error('Job não encontrado');
+
+    if (job.status === 'done') {
+      if (type === 'image') {
+        const newUrl = `/api/image/${parishId}/${dateStr}/${annId}?t=${Date.now()}`;
+        _compareState.imageChoice = 'new';
+        document.getElementById('compare-old-img').src = `/api/image-backup/${parishId}/${dateStr}/${annId}?t=${Date.now()}`;
+        document.getElementById('compare-new-img').src = newUrl;
+        selectImageChoice('new');
+      } else {
+        if (job.html) {
+          const oldRes  = await fetch(`/api/html-backup/${parishId}/${dateStr}/${annId}`);
+          const oldData = await oldRes.json();
+          _compareState.pendingNewHtml  = job.html;
+          _compareState.hasHtmlBackup   = true;
+          _compareState.originalHtml    = oldData.html || '';
+          _compareState.htmlChoice      = 'new';
+          setFrame(document.getElementById('compare-old-html'), getLangContent(oldData.html || '', 'en'));
+          setFrame(document.getElementById('compare-new-html'), getLangContent(job.html, 'en'));
+          document.getElementById('compare-html-pending').style.display = 'none';
+          document.getElementById('compare-html-content').style.display = '';
+          selectHtmlChoice('new');
+        }
+      }
+      return;
+    } else if (job.status === 'error') {
+      throw new Error(job.detail || 'Erro desconhecido');
+    } else {
+      if (overlayText) overlayText.textContent = job.detail || 'Gerando...';
+      await new Promise(r => setTimeout(r, 3000));
+    }
+  }
 }
 
 init();

@@ -1,0 +1,37 @@
+[ROLE]
+You are a high-end Art Director and Brand Designer creating premium social media materials for a Catholic parish.
+
+[TASK]
+Use the provided reference image as the strict visual foundation. Re-imagine the layout into a clean, modern vertical 4:5 portrait flyer. You must explicitly render the provided text data into the new layout.
+
+[BRAND IDENTITY & VISUAL RULES - STRICT]
+- Extract and strictly maintain the core color palette, lighting style, textures, and overarching brand aesthetic from the reference image.
+- Keep any recognizable brand marks, logos, or primary photographic subjects present in the reference image.
+- Composition: Vertical (4:5). Create a sophisticated layout with breathable margins. Focus on a cohesive, professional presentation.
+- Use ONLY visual and textual content from the provided image — never import elements from other sources.
+
+{text_data_block}
+[STYLE GUIDANCE FOR THIS EVENT TYPE]
+{style_block}
+
+[TYPOGRAPHIC HIERARCHY & LAYOUT ARCHITECTURE]
+1. TITLE: Largest visual weight, boldest typography, high contrast, primary focal point.
+2. DESCRIPTION: Medium weight, clean and highly legible font. Position logically below or near the title.
+3. DATE & TIME + LOCATION: Secondary visual weight. Group these logistical details together cleanly.
+4. FOOTER (CONTACT & WEBSITE): Smallest legible size. Neatly aligned at the very bottom as a structured footer.
+
+[LAYOUT & SPACING - MANDATORY]
+- Redistribute and re-diagram all content to fill the canvas intentionally. Large empty areas are forbidden — every region of the image must serve a purpose: text, visual element, texture, color field, or deliberate negative space that contributes to the composition.
+- If text content is sparse, expand visual elements (imagery, color blocks, decorative details) to occupy the space with purpose.
+- Balance is required: no top-heavy, bottom-heavy, or left/right-unbalanced layouts. Content must feel anchored and intentional across the full 4:5 canvas.
+
+[STRICT NEGATIVE CONSTRAINTS - DO NOT RENDER]
+- NO duplicate content of any kind — every piece of information (title, date, time, location, address, contact number, email, website) must appear EXACTLY ONCE in the entire image. If you have already rendered a value once, it must never appear again anywhere — not in a header, footer, background, caption, or any other element.
+- NO invented text — render ONLY what is explicitly listed in TEXT DATA above. Never add, infer, or assume any text not provided.
+- NO label headings — never render words like "Date:", "Time:", "Location:", "Title:", "Contact:", "Website:", or any similar category label. Render only the actual values.
+- NO QR codes or barcodes.
+- NO watermarks or signatures.
+- NO information, logos, or visual elements from other announcements.
+- NO messy, distorted, or unreadable typography.
+- NO split screens or overlapping double-flyer layouts.
+- NO cluttered compositions or abstract filler shapes.

@@ -59,30 +59,20 @@ def image_to_bytes(img: Image.Image) -> bytes:
 
 
 def build_prompt(info: dict) -> str:
-    lines = [
-        "You are a professional graphic designer.",
-        "Recreate the announcement image provided as a high-quality social media graphic at exactly 1080x1350 pixels (4:5 ratio).",
-        "",
-        "RULES:",
-        "- Keep ALL visual elements from the original: logos, photos, background images, color scheme, typography style, decorative elements, borders.",
-        "- Do NOT add new visual elements that are not in the original.",
-        "- The result must feel like a professional, enlarged version of the original design.",
-        "- Show ONLY the following text content (remove everything else):",
-        f"  Title: {info['title']}",
-    ]
+    instructions_path = Path(__file__).parent / "prompts" / "image_generation_instructions.txt"
+    base = instructions_path.read_text(encoding="utf-8").strip()
+
+    lines = [f'- Title: "{info["title"]}" (large headline, keep prominent)']
     if info.get("date"):
-        lines.append(f"  Date: {info['date']}")
+        lines.append(f'- Date: {info["date"]}')
     if info.get("time"):
-        lines.append(f"  Time: {info['time']}")
+        lines.append(f'- Time: {info["time"]}')
     if info.get("location"):
-        lines.append(f"  Location: {info['location']}")
+        lines.append(f'- Location: {info["location"]}')
     if info.get("contacts"):
-        lines.append(f"  Contact: {info['contacts']}")
-    lines += [
-        "- Text must be clean, readable, and well-organized.",
-        "- Output size: exactly 1080x1350px.",
-    ]
-    return "\n".join(lines)
+        lines.append(f'- Contact: {info["contacts"]}')
+
+    return base + "\n\n\n== CONTENT FOR THIS ANNOUNCEMENT ==\n\n" + "\n".join(lines)
 
 
 def test_announcement(name: str, config: dict):
