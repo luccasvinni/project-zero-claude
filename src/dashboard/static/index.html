@@ -222,6 +222,22 @@
   </div>
 </div>
 
+<!-- MODAL: Image generation busy warning -->
+<div class="modal-backdrop" id="img-busy-modal" style="z-index:350">
+  <div class="modal" style="max-width:420px;text-align:center">
+    <div style="margin-bottom:.75rem;display:flex;justify-content:center">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" fill="#f59e0b" stroke="#d97706" stroke-width="1" stroke-linejoin="round"/>
+        <line x1="12" y1="9" x2="12" y2="13" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+        <circle cx="12" cy="17" r="1" fill="#fff"/>
+      </svg>
+    </div>
+    <h3 style="margin-bottom:.75rem">Geração em andamento</h3>
+    <p id="img-busy-text" style="font-size:.86rem;color:#475569;line-height:1.65;margin-bottom:1.25rem"></p>
+    <button class="btn btn-primary" onclick="closeModal('img-busy-modal')">Entendi</button>
+  </div>
+</div>
+
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 

@@ -4,6 +4,31 @@ let dateStr = '';
 let parishCss = '';
 let editingAnnId = null;
 
+let _activeImageGenAnnId = null;
+let _activeImageGenTitle = '';
+let _activeContentGenAnnId = null;
+let _activeContentGenTitle = '';
+
+function _showBusyModal(text) {
+  document.getElementById('img-busy-text').textContent = text;
+  document.getElementById('img-busy-modal').classList.add('open');
+}
+function _showImageBusy() {
+  _showBusyModal(`Uma nova imagem já está sendo gerada para o "${_activeImageGenTitle}", aguarde a conclusão antes de solicitar uma nova geração.`);
+}
+function _showContentBusy() {
+  _showBusyModal(`Um novo texto já está sendo gerado para o "${_activeContentGenTitle}", aguarde a conclusão antes de solicitar uma nova geração.`);
+}
+
+function _clearActiveImageGen() {
+  _activeImageGenAnnId = null;
+  _activeImageGenTitle = '';
+}
+function _clearActiveContentGen() {
+  _activeContentGenAnnId = null;
+  _activeContentGenTitle = '';
+}
+
 const _sourceView = {};
 const _cropState = { annId: null, page: null, drawing: false, sx: 0, sy: 0, ex: 0, ey: 0, sel: null, zoom: 1.0, baseW: null, panMode: false };
 const ZOOM_STEPS = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0];
@@ -12,6 +37,7 @@ const _compareState = {
   hasImage: false, imageChoice: 'new',
   hasHtml: false,  htmlChoice: 'new',
   pendingNewHtml: null,
+  hasHtmlBackup: false, originalHtml: null,
 };
 
 // Map of parish_id -> [{parish_id, date}, ...]  (most recent first)
@@ -216,17 +242,17 @@ function cardHtml(ann) {
     </div>
 
     ${ann.has_image ? `
-    <div style="display:flex;gap:.35rem;flex-wrap:wrap;padding:.9rem .85rem;border-bottom:1px solid #f1f5f9">
-      <a class="btn btn-secondary btn-sm" id="dl-btn-${id}" href="/api/image/${parishId}/${dateStr}/${id}?t=${_gridCacheBust}" download="announcement_${String(id).padStart(2,'0')}.png" style="text-decoration:none">
-        <img src="/static/icon-download.png" alt="" style="width:13px;height:13px;object-fit:contain;filter:brightness(0) opacity(.5)"> Baixar imagem
+    <div style="display:flex;gap:.3rem;flex-wrap:nowrap;padding:.75rem .85rem;border-bottom:1px solid #f1f5f9;overflow:hidden">
+      <a class="btn btn-secondary" id="dl-btn-${id}" href="/api/image/${parishId}/${dateStr}/${id}?t=${_gridCacheBust}" download="announcement_${String(id).padStart(2,'0')}.png" style="text-decoration:none;font-size:.64rem;padding:5px 9px;white-space:nowrap;flex-shrink:0">
+        <img src="/static/icon-download.png" alt="" style="width:12px;height:12px;object-fit:contain;filter:brightness(0) opacity(.5)"> Baixar imagem
       </a>
       ${ann.has_source ? `
-      <button class="btn btn-secondary btn-sm" id="source-btn-${id}" onclick="toggleSourceImage('${id}')">
-        <img src="/static/icon-photo.png" alt="" style="width:13px;height:13px;object-fit:contain;filter:brightness(0) opacity(.5)" id="source-btn-icon-${id}">
+      <button class="btn btn-secondary" id="source-btn-${id}" onclick="toggleSourceImage('${id}')" style="font-size:.64rem;padding:5px 9px;white-space:nowrap;flex-shrink:0">
+        <img src="/static/icon-photo.png" alt="" style="width:12px;height:12px;object-fit:contain;filter:brightness(0) opacity(.5)" id="source-btn-icon-${id}">
         <span id="source-btn-label-${id}">Ver imagem fonte</span>
       </button>
-      <button class="btn btn-secondary btn-sm" id="mark-btn-${id}" onclick="openManualCrop('${id}')">
-        <img src="/static/icon-edit.png" alt="" style="width:13px;height:13px;object-fit:contain;filter:brightness(0) opacity(.5)"> Marcar manualmente
+      <button class="btn btn-secondary" id="mark-btn-${id}" onclick="openManualCrop('${id}')" style="font-size:.64rem;padding:5px 9px;white-space:nowrap;flex-shrink:0">
+        <img src="/static/icon-edit.png" alt="" style="width:12px;height:12px;object-fit:contain;filter:brightness(0) opacity(.5)"> Marcar manualmente
       </button>
       ` : ''}
     </div>
@@ -411,6 +437,22 @@ function getReviewIssues(ann) {
 const LANG_TABS = ['en', 'es', 'pt', 'source'];
 const LANG_IDX  = {en: 0, es: 1, pt: 2};
 
+const _LANG_MARKERS = {
+  en: /\b(january|february|march|april|may|june|july|august|september|october|november|december|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i,
+  es: /\b(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre|lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)\b/i,
+  pt: /\b(janeiro|fevereiro|mar[çc]o|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro|segunda|ter[çc]a|quarta|quinta|sexta|s[aá]bado|domingo)\b/i,
+};
+
+function _detectLang(text) {
+  const plain = text.replace(/<[^>]+>/g, ' ');
+  const scores = {};
+  for (const [lang, rx] of Object.entries(_LANG_MARKERS)) {
+    scores[lang] = (plain.match(new RegExp(rx.source, 'gi')) || []).length;
+  }
+  const best = Object.entries(scores).sort((a, b) => b[1] - a[1]);
+  return best[0][1] > 0 ? best[0][0] : null;
+}
+
 function splitLangs(html) {
   const SEP = /<p[^>]*>\s*-\s*-\s*-\s*<\/p>/gi;
   return html.split(SEP).map(s => s.trim()).filter(Boolean);
@@ -432,6 +474,11 @@ function setFrame(frame, content) {
 function getLangContent(html, lang) {
   if (lang === 'source') return html;
   const parts = splitLangs(html);
+  if (parts.length < 2) return parts[0] ?? '';
+  const detected = parts.map(_detectLang);
+  const idx = detected.indexOf(lang);
+  if (idx !== -1) return parts[idx];
+  // fallback: positional order
   return parts[LANG_IDX[lang]] ?? parts[0] ?? '';
 }
 
@@ -967,6 +1014,11 @@ function quickRegen(id, type) {
 }
 
 async function regenImage(id) {
+  if (_activeImageGenAnnId !== null) { _showImageBusy(); return; }
+  const ann = allAnnouncements.find(a => String(a.id) === String(id));
+  _activeImageGenAnnId = id;
+  _activeImageGenTitle = ann?.title || String(id);
+
   const statusEl = document.getElementById(`regen-image-status-${id}`);
   const btn = document.getElementById(`regen-image-btn-${id}`);
   if (statusEl) statusEl.textContent = 'Gerando...';
@@ -983,6 +1035,10 @@ async function regenImage(id) {
 }
 
 async function regenContent(id) {
+  if (_activeContentGenAnnId !== null) { _showContentBusy(); return; }
+  const ann = allAnnouncements.find(a => String(a.id) === String(id));
+  _activeContentGenAnnId = id;
+  _activeContentGenTitle = ann?.title || String(id);
   const statusEl = document.getElementById(`regen-content-status-${id}`);
   const btn = document.getElementById(`regen-content-btn-${id}`);
   if (statusEl) statusEl.textContent = 'Gerando...';
@@ -1050,11 +1106,15 @@ async function pollRegen(job_id, id, type) {
     const regenBtn = document.getElementById(`regen-${type}-btn-${id}`);
     if (regenBtn) { regenBtn.disabled = false; regenBtn.classList.remove('icon-spin'); }
     if (statusEl) { statusEl.textContent = ''; }
+    if (type === 'image') _clearActiveImageGen();
+    if (type === 'content') _clearActiveContentGen();
     resetRegenArea(id, type);
     return;
   }
   const regenBtn = document.getElementById(`regen-${type}-btn-${id}`);
   if (job.status === 'done') {
+    if (type === 'image') _clearActiveImageGen();
+    if (type === 'content') _clearActiveContentGen();
     if (statusEl) { statusEl.textContent = '✓ Concluído'; setTimeout(() => { statusEl.textContent = ''; }, 3000); }
     if (regenBtn) { regenBtn.disabled = false; regenBtn.classList.remove('icon-spin'); }
     resetRegenArea(id, type);
@@ -1071,21 +1131,25 @@ async function pollRegen(job_id, id, type) {
       if (job.has_html_backup) {
         const oldRes = await fetch(`/api/html-backup/${parishId}/${dateStr}/${id}`);
         const oldData = await oldRes.json();
-        populateHtmlComparison(id, oldData.html || '', job.html || '');
-      } else {
-        if (job.html) {
-          const ann = allAnnouncements.find(a => String(a.id) === String(id));
+        populateHtmlComparison(id, oldData.html || '', job.html || '', true);
+      } else if (job.html) {
+        const ann = allAnnouncements.find(a => String(a.id) === String(id));
+        if (ann && ann.html_content) {
+          populateHtmlComparison(id, ann.html_content, job.html, false);
+        } else {
           if (ann) {
             ann.html_content = job.html;
             const editor = document.getElementById(`editor-${id}`);
             if (editor) editor.value = job.html;
             refreshPreview(id);
           }
+          showToast('Texto gerado com sucesso!');
         }
-        showToast('Texto gerado com sucesso!');
       }
     }
   } else if (job.status === 'error') {
+    if (type === 'image') _clearActiveImageGen();
+    if (type === 'content') _clearActiveContentGen();
     if (statusEl) { statusEl.textContent = '✗ Erro'; setTimeout(() => { statusEl.textContent = ''; }, 4000); }
     if (regenBtn) { regenBtn.disabled = false; regenBtn.classList.remove('icon-spin'); }
     showToast(`Erro: ${job.detail}`, true);
@@ -1194,6 +1258,7 @@ function applyCropZoom() {
 }
 
 async function openManualCrop(id) {
+  if (_activeImageGenAnnId !== null) { _showImageBusy(); return; }
   const locRes = await fetch(`/api/location/${parishId}/${dateStr}/${id}`);
   if (!locRes.ok) { showToast('Localização fonte não disponível.', true); return; }
   const loc = await locRes.json();
@@ -1462,6 +1527,11 @@ async function _doRegenFromCrop(updateTexts) {
   const { annId } = _cropState;
   if (!annId) return;
 
+  if (_activeImageGenAnnId !== null) { _showImageBusy(); return; }
+  const ann = allAnnouncements.find(a => String(a.id) === String(annId));
+  _activeImageGenAnnId = annId;
+  _activeImageGenTitle = ann?.title || String(annId);
+
   const overlay = document.getElementById('crop-regen-overlay');
   const overlayText = document.getElementById('crop-regen-overlay-text');
   const setSaving = (saving, text) => {
@@ -1482,8 +1552,9 @@ async function _doRegenFromCrop(updateTexts) {
     const job = await fetch(`/api/regen/status/${job_id}`)
       .then(r => { if (!r.ok) return null; return r.json(); })
       .catch(() => null);
-    if (!job) { setSaving(false); return; }
+    if (!job) { _clearActiveImageGen(); setSaving(false); return; }
     if (job.status === 'done') {
+      _clearActiveImageGen();
       setSaving(false);
       closeModal('crop-modal');
       resetRegenArea(annId, 'image');
@@ -1497,16 +1568,14 @@ async function _doRegenFromCrop(updateTexts) {
         showToast('Imagem gerada com sucesso!');
       }
       if (updateTexts) {
-        if (job.has_backup) {
-          showHtmlComparisonPending(annId);
-        }
+        showHtmlComparisonPending(annId);
         fetch(`/api/regen/content/${parishId}/${dateStr}/${annId}`, {
           method: 'POST', headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({ instruction: '', use_crop: true }),
         }).then(r => r.json()).then(({ job_id }) => pollRegen(job_id, annId, 'content'));
-        if (!job.has_backup) showToast('Atualizando textos em segundo plano...');
       }
     } else if (job.status === 'error') {
+      _clearActiveImageGen();
       setSaving(false);
       showToast(`Erro: ${job.detail}`, true);
     } else {
@@ -1524,6 +1593,9 @@ function _resetCompareState() {
   _compareState.hasImage = false; _compareState.imageChoice = 'new';
   _compareState.hasHtml = false;  _compareState.htmlChoice = 'new';
   _compareState.pendingNewHtml = null;
+  _compareState.hasHtmlBackup = false; _compareState.originalHtml = null;
+  const confirmBtn = document.querySelector('#compare-modal .btn-primary');
+  if (confirmBtn) confirmBtn.disabled = false;
 }
 
 function selectImageChoice(choice) {
@@ -1590,7 +1662,9 @@ async function confirmComparison() {
 
   if (hasHtml) {
     if (htmlChoice === 'new') {
-      fetch(`/api/html-backup/${parishId}/${dateStr}/${annId}`, { method: 'DELETE' });
+      if (_compareState.hasHtmlBackup) {
+        fetch(`/api/html-backup/${parishId}/${dateStr}/${annId}`, { method: 'DELETE' });
+      }
       if (pendingNewHtml) {
         const ann = allAnnouncements.find(a => String(a.id) === String(annId));
         if (ann) {
@@ -1601,14 +1675,24 @@ async function confirmComparison() {
         }
       }
     } else {
-      const res = await fetch(`/api/restore-html/${parishId}/${dateStr}/${annId}`, { method: 'POST' });
-      const data = await res.json();
-      if (data.html) {
+      if (_compareState.hasHtmlBackup) {
+        const res = await fetch(`/api/restore-html/${parishId}/${dateStr}/${annId}`, { method: 'POST' });
+        const data = await res.json();
+        if (data.html) {
+          const ann = allAnnouncements.find(a => String(a.id) === String(annId));
+          if (ann) {
+            ann.html_content = data.html;
+            const editor = document.getElementById(`editor-${annId}`);
+            if (editor) editor.value = data.html;
+            refreshPreview(annId);
+          }
+        }
+      } else if (_compareState.originalHtml) {
         const ann = allAnnouncements.find(a => String(a.id) === String(annId));
         if (ann) {
-          ann.html_content = data.html;
+          ann.html_content = _compareState.originalHtml;
           const editor = document.getElementById(`editor-${annId}`);
-          if (editor) editor.value = data.html;
+          if (editor) editor.value = _compareState.originalHtml;
           refreshPreview(annId);
         }
       }
@@ -1648,11 +1732,13 @@ function showHtmlComparisonPending(annId) {
   document.getElementById('compare-modal').classList.add('open');
 }
 
-function populateHtmlComparison(annId, oldHtml, newHtml) {
+function populateHtmlComparison(annId, oldHtml, newHtml, hasBackup = false) {
   _compareState.annId = annId;
   _compareState.hasHtml = true;
   _compareState.htmlChoice = 'new';
   _compareState.pendingNewHtml = newHtml;
+  _compareState.hasHtmlBackup = hasBackup;
+  _compareState.originalHtml = oldHtml;
 
   const oldFrame = document.getElementById('compare-old-html');
   const newFrame = document.getElementById('compare-new-html');
