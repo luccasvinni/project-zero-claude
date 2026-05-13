@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-OUTPUT_SIZE = (1080, 1620)
+OUTPUT_SIZE = (1080, 1350)
 PAGES_RANGE = [7, 8, 9, 10]
 
 
@@ -202,17 +202,15 @@ Do not add watermarks, signatures, or any text not listed above."""
 
 
 def resize_to_canvas(img: Image.Image, size: tuple) -> Image.Image:
-    """Redimensiona para o tamanho final mantendo proporção (contain — sem corte)."""
+    """Redimensiona para o tamanho final preenchendo o canvas sem barras (cover — sem corte central)."""
     cw, ch = size
     iw, ih = img.size
-    scale = min(cw / iw, ch / ih)
+    scale = max(cw / iw, ch / ih)
     new_w, new_h = int(iw * scale), int(ih * scale)
     resized = img.resize((new_w, new_h), Image.LANCZOS)
-    canvas = Image.new("RGB", (cw, ch), (0, 0, 0))
-    x = (cw - new_w) // 2
-    y = (ch - new_h) // 2
-    canvas.paste(resized, (x, y))
-    return canvas
+    x = (new_w - cw) // 2
+    y = (new_h - ch) // 2
+    return resized.crop((x, y, x + cw, y + ch))
 
 
 def generate_image_with_gemini(gemini_client: genai.Client, crop: Image.Image, announcement: dict) -> Image.Image | None:

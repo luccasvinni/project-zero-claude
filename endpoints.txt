@@ -1,0 +1,192 @@
+================================================================================
+ENDPOINTS DA API — ParishMate Dashboard (src/dashboard/app.py)
+================================================================================
+
+--------------------------------------------------------------------------------
+PARÓQUIAS & RUNS
+--------------------------------------------------------------------------------
+
+GET /api/parishes
+  Lista os IDs de todas as paróquias configuradas em config/parishes/
+
+GET /api/parish-config/{parish_id}
+  Retorna config básica da paróquia: name e direct_pdf
+  (direct_pdf = true significa que a paróquia exige link manual do PDF no workflow)
+
+GET /api/runs
+  Lista todos os runs existentes (combinações paróquia + data que têm announcements.json)
+  Retorna: [{parish_id, date}, ...]
+
+GET /api/run/{parish_id}/{date}
+  Retorna todos os dados de um run:
+  - Lista de anúncios com HTML, status de revisão, ratings
+  - Flags: has_image, has_html, has_source
+  Retorna: {announcements, approved, parish_id, date}
+
+GET /api/css/{parish_id}
+  Retorna o CSS customizado da paróquia (newspage_rules.css)
+  Usado no preview do HTML dos anúncios
+  Retorna: {css}
+
+--------------------------------------------------------------------------------
+IMAGENS
+--------------------------------------------------------------------------------
+
+GET /api/image/{parish_id}/{date}/{ann_id}
+  Retorna o arquivo PNG gerado da imagem do anúncio
+
+GET /api/image-backup/{parish_id}/{date}/{ann_id}
+  Retorna o PNG de backup (versão anterior antes de uma regeneração)
+
+POST /api/restore-image/{parish_id}/{date}/{ann_id}
+  Restaura o backup como imagem atual e deleta o arquivo de backup
+  Retorna: {ok: true}
+
+DELETE /api/image-backup/{parish_id}/{date}/{ann_id}
+  Deleta o arquivo de backup da imagem sem restaurar a versão anterior
+  Retorna: {ok: true}
+
+--------------------------------------------------------------------------------
+LOCALIZAÇÃO / CROP
+--------------------------------------------------------------------------------
+
+GET /api/location/{parish_id}/{date}/{ann_id}
+  Retorna as coordenadas do anúncio na página do boletim
+  Retorna: {page, top, left, bottom, right}  (valores entre 0 e 1, proporcionais)
+
+GET /api/bulletin-page/{parish_id}/{date}/{ann_id}
+  Retorna a imagem PNG da página completa do boletim onde o anúncio está
+
+GET /api/source-crop/{parish_id}/{date}/{ann_id}
+  Retorna o recorte da imagem original do boletim (apenas a região do anúncio)
+
+POST /api/manual-crop/{parish_id}/{date}/{ann_id}
+  Salva uma localização marcada manualmente pelo usuário
+  Body: {page, top, left, bottom, right}
+  Retorna: {ok: true}
+
+DELETE /api/manual-crop/{parish_id}/{date}/{ann_id}
+  Remove a marcação manual para o anúncio voltar a usar a localização automática
+  Retorna: {ok: true}
+
+--------------------------------------------------------------------------------
+HTML / TEXTO
+--------------------------------------------------------------------------------
+
+POST /api/edit/html/{parish_id}/{date}/{ann_id}
+  Salva edição manual do HTML de um anúncio
+  Body: {html}
+  Retorna: {ok: true}
+
+GET /api/html-backup/{parish_id}/{date}/{ann_id}
+  Retorna o HTML de backup (versão anterior antes de uma regeneração)
+  Retorna: {html}
+
+POST /api/restore-html/{parish_id}/{date}/{ann_id}
+  Restaura o HTML de backup como versão atual e deleta o backup
+  Retorna: {html}  (conteúdo restaurado)
+
+DELETE /api/html-backup/{parish_id}/{date}/{ann_id}
+  Deleta o backup do HTML sem restaurar
+  Retorna: {ok: true}
+
+--------------------------------------------------------------------------------
+REGENERAÇÃO COM IA
+--------------------------------------------------------------------------------
+
+POST /api/regen/image/{parish_id}/{date}/{ann_id}
+  Inicia um job assíncrono de regeneração da imagem via Gemini
+  Body: {instruction?: string}  (instrução pontual opcional)
+  Retorna: {job_id}
+
+POST /api/regen/content/{parish_id}/{date}/{ann_id}
+  Inicia um job assíncrono de regeneração do HTML via Claude
+  Body: {instruction?: string, use_crop?: bool}
+  Retorna: {job_id}
+
+GET /api/regen/status/{job_id}
+  Consulta o status de um job de regeneração (imagem ou HTML)
+  Retorna: {status: "running"|"done"|"error", step, detail, has_backup?, html?}
+
+POST /api/edit/image/{parish_id}/{date}/{ann_id}
+  Inicia um job de edição pontual da imagem com prompt personalizado
+  Body: {prompt}
+  Retorna: {job_id}
+
+GET /api/edit/image/status/{job_id}
+  Consulta o status de um job de edição de imagem
+  Retorna: {status: "running"|"done"|"error", step, detail}
+
+--------------------------------------------------------------------------------
+AVALIAÇÃO & FEEDBACK
+--------------------------------------------------------------------------------
+
+POST /api/rate/{parish_id}/{date}/{ann_id}
+  Salva as notas (0–5 estrelas) de imagem e HTML de um anúncio
+  Body: {image_rating, html_rating}
+  Retorna: {ok: true}
+
+POST /api/feedback/{parish_id}/{date}/{ann_id}
+  Salva nota + instrução textual de melhoria para um agente
+  Body: {type: "image"|"content", rating, instruction}
+  - Salva o rating em ratings.json
+  - Salva a instrução em config/parishes/{parish_id}/agent_feedback/
+  Retorna: {ok: true}
+
+--------------------------------------------------------------------------------
+REVISÃO
+--------------------------------------------------------------------------------
+
+POST /api/review/{parish_id}/{date}/{ann_id}
+  Executa revisão automática do anúncio pelo Agent 5 (imagem + HTML)
+  Retorna: {review, status: "approved"|"needs_review"}
+
+POST /api/suggest-corrections/{parish_id}/{date}/{ann_id}
+  Envia o HTML + lista de erros ao Claude e recebe sugestões de correção
+  Body: {html, spelling_errors: string[], html_issues?: string[]}
+  Retorna: {suggestions: [{original, suggestion, context}]}
+
+--------------------------------------------------------------------------------
+WORKFLOW
+--------------------------------------------------------------------------------
+
+POST /api/workflow/start
+  Inicia o workflow completo ou parcial em background
+  Body:
+    parish_id       (string)
+    mode            "complete" | "images" | "content"
+    reader_instruction  (string, opcional — só usado no modo complete)
+    bulletin_url    (string, opcional — obrigatório se direct_pdf=true)
+  Retorna: {job_id}
+
+  Modos:
+    complete  = scraper → reader → geração de imagens + HTML → revisor
+    images    = apenas regenera imagens do último run existente
+    content   = apenas regenera HTML do último run existente
+
+GET /api/workflow/status/{job_id}
+  Consulta o status do workflow em execução
+  Retorna: {status, step, detail, parish_id, date, output_dir}
+
+  Steps (em ordem):
+    scraper → reader → preparing → generation → reviewer → done
+
+--------------------------------------------------------------------------------
+FINALIZAÇÃO
+--------------------------------------------------------------------------------
+
+POST /api/finalize/{parish_id}/{date}
+  Finaliza o run: Claude analisa todos os ratings e problemas reportados
+  e gera instruções de aprendizado para os próximos runs, salvas em:
+    config/parishes/{parish_id}/agent_feedback/image_feedback.md
+    config/parishes/{parish_id}/agent_feedback/html_feedback.md
+  Retorna: {ok: true, image_feedback, html_feedback}
+
+--------------------------------------------------------------------------------
+DASHBOARD
+--------------------------------------------------------------------------------
+
+GET /
+  Serve o HTML do dashboard (index.html)
+
+================================================================================
