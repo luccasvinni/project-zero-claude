@@ -1,6 +1,6 @@
 parish:
   id: "skdrexel"
-  name: "St. Katharine Drexel Catholic Church"
+  name: "St. Katharine Drexel Catholic Parish"
   bulletin_archive_url: "https://www.skdrexel.org/CatholicChurch.php?pg=Bulletin+Archive"
   internal_domain: "skdrexel.org"
 
@@ -9,8 +9,20 @@ scraper:
   timeout_seconds: 30
   pdf_link_pattern: "(?i)(bulletin|boletim).*\\.pdf$"
 
-image_generator:
-  api: "openai_dalle3"
-  style_instructions: "Watercolor style, warm and welcoming, Catholic church aesthetic, soft pastel colors, appropriate for a parish bulletin announcement"
-  size: "1024x1024"
-  max_images_per_run: 10
+reader:
+  bulletin_pages: [5, 6, 7, 8, 9, 10]
+
+content_rules:
+  term_replacements:
+    - description: "Replace the ecclesial type term in the parish name with 'Parish' across all generated text content"
+      scope: "parish_name_references"
+      languages:
+        en:
+          from: "Church"
+          to: "Parish"
+        pt:
+          from: "Igreja"
+          to: "Paróquia"
+        es:
+          from: "Iglesia"
+          to: "Parroquia"
