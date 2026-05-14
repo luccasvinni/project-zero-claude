@@ -227,7 +227,7 @@ async def trigger_agent_4a(output_dir: Path, parish_id: str, ann_id: str):
     sys.path.insert(0, str(Path(__file__).parent))
     from agent4a_image import (
         locate_announcements, crop_announcement, generate_image_with_gemini,
-        resize_to_canvas, OUTPUT_SIZE, PAGES_RANGE
+        resize_to_canvas, OUTPUT_SIZE
     )
     import google.genai as genai_mod
 

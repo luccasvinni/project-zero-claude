@@ -116,6 +116,12 @@
     <!-- Image section -->
     <div id="compare-image-section" style="display:none">
       <div style="font-size:.63rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#64748b;margin-bottom:.5rem">Imagem</div>
+      <div id="compare-source-row" style="display:none;margin-bottom:.75rem">
+        <div style="font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#94a3b8;text-align:center;margin-bottom:.4rem">Fonte (boletim)</div>
+        <div style="text-align:center">
+          <img id="compare-source-img" style="max-height:200px;max-width:100%;object-fit:contain;border-radius:8px;border:1px solid #e8ecf0;background:#f8fafc">
+        </div>
+      </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;margin-bottom:.75rem">
         <div id="cmp-img-old" onclick="selectImageChoice('old')" style="display:flex;flex-direction:column;gap:.5rem;cursor:pointer;opacity:.45;transition:opacity .2s">
           <div style="font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#94a3b8;text-align:center">Anterior</div>
@@ -161,6 +167,8 @@
       <textarea id="compare-instr" style="width:100%;box-sizing:border-box;resize:none;height:54px;min-height:54px;max-height:54px;line-height:1.4;font-size:.82rem;border:1px solid #e2e8f0;border-radius:6px;padding:.35rem .6rem;color:#1e293b;margin-bottom:.6rem;font-family:inherit;outline:none;overflow-y:auto;display:block" placeholder="Instrução opcional para nova geração..."></textarea>
       <div style="display:flex;justify-content:flex-end;gap:.5rem">
         <button id="compare-cancel-btn" class="btn btn-secondary" onclick="closeCompareModal()">Cancelar</button>
+        <button id="compare-source-btn" class="btn btn-secondary" onclick="toggleCompareSource()"><img src="/static/icon-photo.png" alt="" style="width:12px;height:12px;object-fit:contain;filter:brightness(0) opacity(.5)" id="compare-source-btn-icon"><span id="compare-source-btn-label"> Ver imagem fonte</span></button>
+        <button id="compare-recrop-btn" class="btn btn-secondary" onclick="reopenCropFromComparison()"><img src="/static/icon-edit.png" alt="" style="width:12px;height:12px;object-fit:contain;filter:brightness(0) opacity(.5)"> Marcar novamente</button>
         <button id="compare-regen-btn" class="btn btn-secondary" onclick="regenFromComparison()">↺ Gerar Novamente</button>
         <button class="btn btn-primary" onclick="confirmComparison()">✓ Confirmar seleção</button>
       </div>
@@ -199,7 +207,7 @@
         <button class="btn btn-danger btn-sm" onclick="clearManualCrop()">↺ Limpar marcação</button>
       </div>
       <div style="display:flex;align-items:center;gap:.5rem">
-        <button class="btn btn-secondary btn-sm" onclick="closeModal('crop-modal')" id="crop-cancel-btn">Cancelar</button>
+        <button class="btn btn-secondary btn-sm" onclick="cancelCrop()" id="crop-cancel-btn">Cancelar</button>
         <div id="crop-regen-status" style="display:none;align-items:center;gap:.4rem;color:#94a3b8;font-size:.73rem;font-weight:600">
           <span class="spinner" style="border-color:rgba(148,163,184,.35);border-top-color:#94a3b8"></span>
           Gerando...

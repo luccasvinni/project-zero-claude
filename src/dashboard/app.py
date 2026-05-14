@@ -36,6 +36,11 @@ _image_jobs: dict[str, dict] = {}
 _regen_jobs: dict[str, dict] = {}
 
 
+def _get_prompt_mode(parish_id: str) -> str:
+    config = _load_parish_yaml(parish_id)
+    return config.get("image_generation", {}).get("prompt_mode", "python")
+
+
 async def _run_image_edit(job_id: str, parish_id: str, date: str, ann_id: str, prompt: str):
     job = _image_jobs[job_id]
 
@@ -47,7 +52,7 @@ async def _run_image_edit(job_id: str, parish_id: str, date: str, ann_id: str, p
         sys.path.insert(0, str(Path(__file__).parent.parent / "agents"))
         from agent4a_image import (
             locate_announcements, crop_announcement,
-            extract_announcement_json, build_prompt_from_json,
+            extract_announcement_json, build_prompt_from_json, build_prompt_with_claude,
             generate_image_with_gemini, resize_to_canvas, OUTPUT_SIZE,
             load_parish_logo, composite_logo,
         )
@@ -78,13 +83,17 @@ async def _run_image_edit(job_id: str, parish_id: str, date: str, ann_id: str, p
 
         # Step 2 — extract JSON + build prompt + generate
         is_manual = location.get("manual", False)
-        step("generating", "Extraindo dados da imagem (Agent 1)...")
+        step("generating", "Extraindo dados da imagem...")
         crop = crop_announcement(pages_dir, location, padding=0 if is_manual else 12)
         ann_json = extract_announcement_json(anthropic_client, crop)
         ann_json["_edit_request"] = prompt
         if is_manual:
             ann_json["_strict_crop"] = True
-        final_prompt = build_prompt_from_json(ann_json)
+        _pmode = _get_prompt_mode(parish_id)
+        if _pmode == "claude":
+            final_prompt = build_prompt_with_claude(anthropic_client, ann_json, crop)
+        else:
+            final_prompt = build_prompt_from_json(ann_json)
 
         step("generating", "Gerando nova imagem com IA...")
         generated = generate_image_with_gemini(gemini_client, crop, final_prompt)
@@ -120,7 +129,7 @@ async def _run_regen_image(job_id: str, parish_id: str, date: str, ann_id: str, 
         sys.path.insert(0, str(Path(__file__).parent.parent / "agents"))
         from agent4a_image import (
             locate_announcements, crop_announcement,
-            extract_announcement_json, build_prompt_from_json,
+            extract_announcement_json, build_prompt_from_json, build_prompt_with_claude,
             generate_image_with_gemini, resize_to_canvas, OUTPUT_SIZE,
             load_parish_logo, composite_logo,
         )
@@ -149,14 +158,18 @@ async def _run_regen_image(job_id: str, parish_id: str, date: str, ann_id: str, 
             raise ValueError("Não foi possível localizar o anúncio")
 
         is_manual = location.get("manual", False)
-        step("generating", "Extraindo dados da imagem (Agent 1)...")
+        step("generating", "Extraindo dados da imagem...")
         crop = crop_announcement(pages_dir, location, padding=0 if is_manual else 12)
         ann_json = extract_announcement_json(anthropic_client, crop)
         if instruction:
             ann_json["_edit_request"] = instruction
         if is_manual:
             ann_json["_strict_crop"] = True
-        final_prompt = build_prompt_from_json(ann_json)
+        _pmode = _get_prompt_mode(parish_id)
+        if _pmode == "claude":
+            final_prompt = build_prompt_with_claude(anthropic_client, ann_json, crop)
+        else:
+            final_prompt = build_prompt_from_json(ann_json)
 
         step("generating", "Gerando nova imagem com IA...")
         generated = generate_image_with_gemini(gemini_client, crop, final_prompt)
@@ -369,18 +382,19 @@ async def _run_workflow(job_id: str, parish_id: str, mode: str = "complete", rea
 
         # Step 4 — generation (varies by mode)
         _odir = output_dir
+        _pmode = _get_prompt_mode(parish_id)
         import agent4a_image as _a4a, agent4b_html as _a4b
 
         if mode == "images":
             step("generation", "Gerando imagens...")
-            await asyncio.to_thread(_run_in_thread, lambda: _a4a.run(output_dir=_odir, parish_id=_pid))
+            await asyncio.to_thread(_run_in_thread, lambda: _a4a.run(output_dir=_odir, parish_id=_pid, prompt_mode=_pmode))
         elif mode == "content":
             step("generation", "Gerando conteúdo HTML...")
             await asyncio.to_thread(_run_in_thread, lambda: _a4b.run(output_dir=_odir, parish_id=_pid))
         else:  # complete
             step("generation", "Gerando imagens e conteúdo...")
             await asyncio.gather(
-                asyncio.to_thread(_run_in_thread, lambda: _a4a.run(output_dir=_odir, parish_id=_pid)),
+                asyncio.to_thread(_run_in_thread, lambda: _a4a.run(output_dir=_odir, parish_id=_pid, prompt_mode=_pmode)),
                 asyncio.to_thread(_run_in_thread, lambda: _a4b.run(output_dir=_odir, parish_id=_pid)),
             )
 

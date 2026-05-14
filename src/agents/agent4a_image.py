@@ -14,20 +14,25 @@ from dotenv import load_dotenv
 load_dotenv()
 
 OUTPUT_SIZE = (1080, 1350)
-PAGES_RANGE = [7, 8, 9, 10]
 
 EXTRACTION_SYSTEM_PROMPT = """You are a precise data extraction agent. Read the provided announcement image and extract specific information into a structured JSON object.
 
 Extract the following fields:
 - "titulo": event title exactly as it appears in the image (required)
 - "tipo_evento": classify into exactly one of: "feminine_retreat", "sacramental", "volunteer", "prayer", "saints", "matrimonial", "ministry", "other"
-- "data": event date formatted as "Month Day, Year" (e.g. "May 19, 2026") — omit if not present
-- "hora": event time formatted as "00:00am/pm" (e.g. "7:00pm") — omit if not present
+- "data": event date exactly as it appears in the image — preserve the original formatting, capitalization, ordinal suffixes (e.g. "May 18th", "domingo, 18 de mayo", "May 18, 2026") — omit if not present
+- "hora": event time exactly as it appears in the image — preserve the original formatting (e.g. "7:00pm", "7:00 PM", "19h00") — omit if not present
 - "local": event location exactly as it appears in the image — omit if not present
 - "descricao": short description of the event, max 60 characters, only if explicitly present in the image — omit if not present
 - "emails": array of email addresses exactly as they appear — omit if not present
 - "telefones": array of phone numbers exactly as they appear — omit if not present
-- "websites": array of URLs/websites exactly as they appear — omit if not present
+- "websites": array of URLs/websites belonging to the announcement — omit if not present
+
+STRICT EXCLUSIONS — never extract the following, even if visible in the image:
+- Page headers: the bulletin date line and liturgical day name printed at the very top of the page
+- Page footers: any text referencing DiscoverMass, bulletin printing services, or lines such as "View this bulletin online at www.DiscoverMass.com" — these are printing infrastructure and must be completely ignored
+- Any URL containing "discovermass" (case-insensitive) must never appear in the output
+- QR codes and barcodes: never extract the URL or content encoded in a QR code or barcode as a website — QR codes are handled separately and must not appear in the extracted data
 
 Rules:
 - Return ONLY a valid JSON object, no explanation or markdown fences
@@ -52,13 +57,17 @@ def encode_image(img_path: Path) -> str:
 
 def locate_announcements(client: anthropic.Anthropic, pages_dir: Path, announcements: list[dict]) -> dict:
     """Usa Claude para identificar a região de cada anúncio nas páginas."""
+    page_files = sorted(pages_dir.glob("page_*.png"))
+    page_nums = [int(f.stem.split("_")[1]) for f in page_files]
+    pages_list = ", ".join(str(n) for n in page_nums)
+
     content = []
     content.append({
         "type": "text",
         "text": (
-            "The following images are pages 7, 8, 9, and 10 of a Catholic parish bulletin. "
-            "For each announcement listed below, identify:\n"
-            "1. Which page it appears on (7, 8, 9, or 10)\n"
+            f"The following images are pages {pages_list} of a Catholic parish bulletin. "
+            f"For each announcement listed below, identify:\n"
+            f"1. Which page it appears on ({pages_list})\n"
             "2. Its bounding box as percentages: top_pct, left_pct, bottom_pct, right_pct (0.0 to 1.0)\n\n"
             "Announcements are visually separated by white space or margins. "
             "Treat every visible white gap between blocks of content as a hard boundary: "
@@ -73,12 +82,12 @@ def locate_announcements(client: anthropic.Anthropic, pages_dir: Path, announcem
             "'View this bulletin online at www.DiscoverMass.com'. "
             "Every bounding box must end ABOVE this footer line.\n\n"
             "Return a JSON array:\n"
-            '[{"id": "1", "page": 7, "top": 0.05, "left": 0.0, "bottom": 0.25, "right": 1.0}, ...]\n\n'
+            f'[{{"id": "1", "page": {page_nums[0] if page_nums else 1}, "top": 0.05, "left": 0.0, "bottom": 0.25, "right": 1.0}}, ...]\n\n'
             "Return ONLY the JSON array, no explanation."
         )
     })
 
-    for page_num in PAGES_RANGE:
+    for page_num in page_nums:
         img_path = pages_dir / f"page_{page_num:02d}.png"
         if not img_path.exists():
             continue
@@ -214,7 +223,7 @@ def build_prompt_from_json(data: dict) -> str:
 
     lines = [
         "[TEXT DATA TO RENDER - EXACT STRINGS ONLY]",
-        "The labels below (TITLE, DESCRIPTION, DATE, TIME, LOCATION, CONTACT, WEBSITE) are structural hints for layout placement only — do NOT render them as visible text in the image. Render ONLY the quoted string values. Each value must appear EXACTLY ONCE in the final image — never repeat any text, date, time, location, contact, or link anywhere.",
+        "CRITICAL: The capitalized labels below (TITLE, DESCRIPTION, DATE, TIME, DATE & TIME, LOCATION, CONTACT, WEBSITE) are internal layout hints ONLY. They must NEVER appear as visible text in the final image — not as headings, subtitles, captions, or in any form. Render ONLY the quoted string values that follow each label. Each value must appear EXACTLY ONCE.",
     ]
 
     if data.get("titulo"):
@@ -224,11 +233,9 @@ def build_prompt_from_json(data: dict) -> str:
 
     data_val = data.get("data")
     hora_val = data.get("hora")
-    if data_val and hora_val:
-        lines.append(f'- DATE & TIME: "{data_val} at {hora_val}"')
-    elif data_val:
+    if data_val:
         lines.append(f'- DATE: "{data_val}"')
-    elif hora_val:
+    if hora_val:
         lines.append(f'- TIME: "{hora_val}"')
 
     if data.get("local"):
@@ -239,7 +246,8 @@ def build_prompt_from_json(data: dict) -> str:
         lines.append(f'- CONTACT: "{" | ".join(contatos)}"')
 
     for url in data.get("websites", []):
-        lines.append(f'- WEBSITE: "{url}"')
+        if "discovermass" not in url.lower():
+            lines.append(f'- WEBSITE: "{url}"')
 
     text_data_block = "\n".join(lines) + "\n\n"
     style_block = EVENT_STYLE_MAP.get(data.get("tipo_evento", "other"), EVENT_STYLE_MAP["other"])
@@ -259,6 +267,64 @@ def build_prompt_from_json(data: dict) -> str:
         prompt += f"\n\n[TARGETED EDIT]\nApply only this change, keep everything else intact:\n- {edit_request}"
 
     return prompt
+
+
+def build_prompt_with_claude(client: anthropic.Anthropic, ann_json: dict, crop: Image.Image) -> str:
+    """Usa Claude para gerar o prompt do Gemini com base no JSON extraído e no recorte visual."""
+    buf = io.BytesIO()
+    crop.save(buf, format="PNG")
+    img_b64 = base64.standard_b64encode(buf.getvalue()).decode()
+
+    style_block = EVENT_STYLE_MAP.get(ann_json.get("tipo_evento", "other"), EVENT_STYLE_MAP["other"])
+
+    data_lines = []
+    if ann_json.get("titulo"):
+        data_lines.append(f'Title: "{ann_json["titulo"]}"')
+    if ann_json.get("data"):
+        data_lines.append(f'Date: "{ann_json["data"]}"')
+    if ann_json.get("hora"):
+        data_lines.append(f'Time: "{ann_json["hora"]}"')
+    if ann_json.get("local"):
+        data_lines.append(f'Location: "{ann_json["local"]}"')
+    if ann_json.get("descricao"):
+        data_lines.append(f'Description: "{ann_json["descricao"]}"')
+    contatos = ann_json.get("telefones", []) + ann_json.get("emails", [])
+    if contatos:
+        data_lines.append(f'Contact: "{" | ".join(contatos)}"')
+    for url in ann_json.get("websites", []):
+        if "discovermass" not in url.lower():
+            data_lines.append(f'Website: "{url}"')
+
+    edit_request = ann_json.get("_edit_request", "")
+
+    user_msg = (
+        "Write a detailed image generation prompt for Gemini AI to create a professional "
+        "parish announcement flyer (1080×1350px, portrait orientation for social media).\n\n"
+        f"ANNOUNCEMENT DATA (use these exact text values in the image):\n" + "\n".join(data_lines) + "\n\n"
+        f"VISUAL STYLE:\n{style_block}\n\n"
+        "The attached bulletin crop is for context only — the generated image must be a fully "
+        "redesigned social media flyer, not a copy of the original.\n\n"
+        "Requirements:\n"
+        "- Specify which text strings must appear and where (title prominent, date/time/location below)\n"
+        "- Each text value must appear EXACTLY ONCE — never repeat any text\n"
+        "- Describe colors, typography, background, and visual elements in detail\n"
+        "- Catholic spiritual atmosphere appropriate to the event type\n"
+        + (f"\nTARGETED EDIT — apply only this change, keep everything else intact:\n- {edit_request}\n" if edit_request else "")
+        + "\nReturn ONLY the prompt text, no preamble or explanation."
+    )
+
+    response = client.messages.create(
+        model="claude-opus-4-5",
+        max_tokens=1024,
+        messages=[{
+            "role": "user",
+            "content": [
+                {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": img_b64}},
+                {"type": "text", "text": user_msg},
+            ],
+        }],
+    )
+    return response.content[0].text.strip()
 
 
 def resize_to_canvas(img: Image.Image, size: tuple) -> Image.Image:
@@ -306,7 +372,7 @@ def generate_image_with_gemini(gemini_client: genai.Client, crop: Image.Image, p
     return None
 
 
-async def run(output_dir: Path, parish_id: str) -> dict[str, str]:
+async def run(output_dir: Path, parish_id: str, prompt_mode: str = "python") -> dict[str, str]:
     anthropic_client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     gemini_client = genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
 
@@ -345,13 +411,15 @@ async def run(output_dir: Path, parish_id: str) -> dict[str, str]:
 
         crop = crop_announcement(pages_dir, location)
 
-        # Agent 1: extract structured JSON from the crop
-        print(f"  Extraindo dados da imagem (Agent 1)...")
+        print(f"  Extraindo dados da imagem...")
         ann_json = extract_announcement_json(anthropic_client, crop)
         print(f"  JSON extraído: {ann_json}")
 
-        # Agent 2: build final prompt from JSON + template
-        prompt = build_prompt_from_json(ann_json)
+        if prompt_mode == "claude":
+            print(f"  Gerando prompt via Claude...")
+            prompt = build_prompt_with_claude(anthropic_client, ann_json, crop)
+        else:
+            prompt = build_prompt_from_json(ann_json)
 
         generated = generate_image_with_gemini(gemini_client, crop, prompt)
         using_placeholder = False

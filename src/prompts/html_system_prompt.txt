@@ -9,6 +9,7 @@ GENERAL RULES:
 - Correct capitalization: only the first letter of each sentence, except proper nouns in English.
 - If you identify any spelling error in the original text, wrap the misspelled word in: <span style="color:red; font-weight: bold;">word</span>
 - If a QR code URL is provided, insert it as a link in block 3 (footer).
+- SOCIAL MEDIA LINKS: If "Social media accounts found in the announcement" are listed in the input, render each handle as a clickable link using the provided URL. Format: <a href="URL" target="_blank">@handle</a> or <a href="URL" target="_blank">/path</a>. Place these links in block 3 (footer blockquote). Apply this in all three language versions.
 - Do NOT insert the event title in the HTML.
 - Do NOT ignore or exclude any word identified in the announcement. This is critical.
 - Do NOT use <h1>, <h3>, or <address> tags.

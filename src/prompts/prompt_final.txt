@@ -17,7 +17,7 @@ Use the provided reference image as the strict visual foundation. Re-imagine the
 [TYPOGRAPHIC HIERARCHY & LAYOUT ARCHITECTURE]
 1. TITLE: Largest visual weight, boldest typography, high contrast, primary focal point.
 2. DESCRIPTION: Medium weight, clean and highly legible font. Position logically below or near the title.
-3. DATE & TIME + LOCATION: Secondary visual weight. Group these logistical details together cleanly.
+3. DATE + TIME + LOCATION: Secondary visual weight. Group these logistical details together cleanly.
 4. FOOTER (CONTACT & WEBSITE): Smallest legible size. Neatly aligned at the very bottom as a structured footer.
 
 [LAYOUT & SPACING - MANDATORY]
@@ -28,10 +28,12 @@ Use the provided reference image as the strict visual foundation. Re-imagine the
 [STRICT NEGATIVE CONSTRAINTS - DO NOT RENDER]
 - NO duplicate content of any kind — every piece of information (title, date, time, location, address, contact number, email, website) must appear EXACTLY ONCE in the entire image. If you have already rendered a value once, it must never appear again anywhere — not in a header, footer, background, caption, or any other element.
 - NO invented text — render ONLY what is explicitly listed in TEXT DATA above. Never add, infer, or assume any text not provided.
-- NO label headings — never render words like "Date:", "Time:", "Location:", "Title:", "Contact:", "Website:", or any similar category label. Render only the actual values.
-- NO QR codes or barcodes.
+- NO label headings — CRITICAL RULE: the words TITLE, DESCRIPTION, DATE, TIME, LOCATION, CONTACT, WEBSITE, FOOTER are structural layout hints used internally and must NEVER appear as visible text in the image. Never render any of these words or any variation of them. Render ONLY the quoted values that follow them. A viewer of the final image must see only the event information itself, never any category name or label.
+- DATE AND TIME FORMATTING — CRITICAL RULE: render the date and time values EXACTLY as they are provided in the TEXT DATA, character by character. Do not reformat, translate, abbreviate, or change the date or time in any way. If the value is "May 18th", render "May 18th". If it is "domingo, 18 de mayo", render "domingo, 18 de mayo". Never convert between formats.
+- NO QR codes or barcodes — CRITICAL: if the reference image contains a QR code or barcode, it must be completely removed and never reproduced in any form in the generated image. Replace the area it occupied with a background element or visual fill consistent with the design.
 - NO watermarks or signatures.
 - NO information, logos, or visual elements from other announcements.
 - NO messy, distorted, or unreadable typography.
 - NO split screens or overlapping double-flyer layouts.
 - NO cluttered compositions or abstract filler shapes.
+- NO bulletin metadata: never render dates, names, or URLs from page headers or footers (e.g. liturgical day lines, "View this bulletin online", "www.DiscoverMass.com", or any DiscoverMass reference). These are printing infrastructure and must never appear in the image.

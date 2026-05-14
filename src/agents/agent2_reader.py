@@ -73,6 +73,26 @@ def apply_term_replacements(announcements: list[dict], replacements: list[dict])
     return announcements
 
 
+def _load_exclusion_rules(parish_id: str) -> str:
+    import yaml
+    config_path = CONFIG_DIR / f"{parish_id}.yaml"
+    if config_path.exists():
+        cfg = yaml.safe_load(config_path.read_text()) or {}
+        rules = cfg.get("reader", {}).get("exclusion_rules", [])
+        if rules:
+            return "\n".join(f"- {r}" for r in rules)
+    return (
+        "- Regular mass schedules and liturgical celebrations\n"
+        "- Liturgical texts, gospels, and readings\n"
+        "- Permanent pastoral messages from the priest\n"
+        "- Parish contact information and address\n"
+        "- Prayers and spiritual reflections\n"
+        "- Sponsor acknowledgements or advertiser thank-you sections\n"
+        "- Events whose date has already passed\n"
+        "- Page headers and footers (bulletin date, DiscoverMass references)"
+    )
+
+
 def _load_bulletin_pages(parish_id: str) -> list[int]:
     import yaml
     config_path = CONFIG_DIR / f"{parish_id}.yaml"
@@ -249,7 +269,8 @@ ANNOUNCEMENTS:
 
 async def run(pdf_path: Path, parish_id: str, instruction: str = "") -> list[dict]:
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-    system_prompt = (PROMPTS_DIR / "system_prompt.txt").read_text()
+    exclusion_rules = _load_exclusion_rules(parish_id)
+    system_prompt = (PROMPTS_DIR / "system_prompt.txt").read_text().replace("{exclusion_rules}", exclusion_rules)
     if instruction.strip():
         system_prompt += f"\n\nADDITIONAL INSTRUCTION FOR THIS RUN:\n{instruction.strip()}"
 

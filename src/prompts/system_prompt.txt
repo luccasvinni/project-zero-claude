@@ -11,13 +11,10 @@ WHAT COUNTS AS AN ANNOUNCEMENT:
 - Activities for specific groups (youth, couples, seniors, etc.)
 
 WHAT IS NOT AN ANNOUNCEMENT:
-- Regular mass schedules and liturgical celebrations
-- Liturgical texts, gospels, and readings
-- Permanent pastoral messages from the priest
-- Parish contact information and address
-- Prayers and spiritual reflections
-- Sponsor acknowledgements, advertiser thank-you sections, or any content thanking sponsors/advertisers
-- Events or activities whose date has already passed (compare against today's date, which will be provided)
+{exclusion_rules}
+
+STRICT EXCLUSION — DISCOVERMASS:
+Never include any text, URL, or reference related to "DiscoverMass" or "www.DiscoverMass.com" in any extracted field (title, body, location, or any other). This is bulletin printing infrastructure, not parish content.
 
 VISUAL IDENTIFICATION RULE:
 Announcements are visually separated from each other by white space or margin. Each block of content between white margins is a separate announcement. Do not merge two separate announcement blocks into one.
@@ -32,7 +29,10 @@ Return a valid JSON array. Each element must follow this exact structure:
   "event_date": "<ISO 8601 date string if a specific date is mentioned, otherwise null>",
   "location": "<location if mentioned, otherwise null>",
   "order": <position in reading order, starting at 1>,
-  "image_prompt": "<a descriptive prompt in English to generate an image that visually represents this announcement, appropriate for a Catholic parish context>"
+  "image_prompt": "<a descriptive prompt in English to generate an image that visually represents this announcement, appropriate for a Catholic parish context>",
+  "social_media": [{"platform": "<instagram|facebook|youtube|twitter|tiktok|linkedin>", "handle": "<@handle or /path exactly as it appears>"}]
 }
+
+For "social_media": include only when the announcement visually shows a recognizable social media platform icon (Instagram, Facebook, YouTube, Twitter/X, TikTok, LinkedIn) paired with a @handle or /path identifier. Omit the field entirely if no social media accounts are shown.
 
 Return ONLY the JSON array. No explanation, no markdown, no extra text.

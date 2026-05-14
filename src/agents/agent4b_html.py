@@ -47,17 +47,6 @@ def load_parish_config(parish_id: str) -> dict:
     return {}
 
 
-def load_html_feedback(parish_id: str) -> str:
-    path = (
-        Path(__file__).parent.parent.parent
-        / "config" / "parishes" / parish_id / "agent_feedback" / "html_feedback.md"
-    )
-    if not path.exists():
-        return ""
-    lines = [l for l in path.read_text().splitlines() if l.startswith("-")]
-    return "\n".join(lines)
-
-
 def load_system_prompt(parish_id: str) -> str:
     config = load_parish_config(parish_id)
     internal_domain = config.get("parish", {}).get("internal_domain", "")
@@ -67,13 +56,27 @@ def load_system_prompt(parish_id: str) -> str:
     )
     template = template_path.read_text() if template_path.exists() else ""
     raw = (PROMPTS_DIR / "html_system_prompt.txt").read_text()
-    prompt = raw.replace("{template}", template).replace("{internal_domain}", internal_domain)
+    return raw.replace("{template}", template).replace("{internal_domain}", internal_domain)
 
-    feedback = load_html_feedback(parish_id)
-    if feedback:
-        prompt += f"\n\n---\n\nFEEDBACK DE RUNS ANTERIORES (aplique estas lições):\n{feedback}"
 
-    return prompt
+_SOCIAL_BASE = {
+    "instagram": "https://instagram.com/",
+    "facebook": "https://facebook.com/",
+    "youtube": "https://youtube.com/",
+    "twitter": "https://x.com/",
+    "x": "https://x.com/",
+    "tiktok": "https://tiktok.com/",
+    "linkedin": "https://linkedin.com/",
+}
+
+def _social_url(platform: str, handle: str) -> str:
+    base = _SOCIAL_BASE.get(platform.lower(), "")
+    if not base:
+        return ""
+    clean = handle.lstrip("@").lstrip("/")
+    if platform.lower() == "tiktok" and not clean.startswith("@"):
+        clean = "@" + clean
+    return base + clean
 
 
 def build_user_message(announcement: dict, qr_urls: list[str]) -> str:
@@ -86,6 +89,14 @@ def build_user_message(announcement: dict, qr_urls: list[str]) -> str:
         "Body:",
         announcement.get("body", ""),
     ]
+    social = announcement.get("social_media") or []
+    if social:
+        lines.append("")
+        lines.append("Social media accounts found in the announcement:")
+        for entry in social:
+            url = _social_url(entry.get("platform", ""), entry.get("handle", ""))
+            if url:
+                lines.append(f"- {entry['platform'].capitalize()}: {entry['handle']} → {url}")
     if qr_urls:
         lines.append("")
         lines.append("QR code URL(s) found in the bulletin page:")

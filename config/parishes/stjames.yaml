@@ -7,3 +7,33 @@ scraper:
 
 reader:
   bulletin_pages: [7]
+  exclusion_rules:
+    - "Regular mass schedules and liturgical celebrations"
+    - "Liturgical texts, gospels, readings, and devotional saint biographies"
+    - "Permanent pastoral messages from the priest"
+    - "Parish contact information and address"
+    - "Prayers and spiritual reflections"
+    - "Prayer lists or similars"
+    - "Text to Give Announcements or similars"
+    - "Sponsor acknowledgements, advertiser thank-you sections, or any content thanking sponsors/advertisers"
+    - "Events or activities whose date has already passed (compare against today's date, which will be provided)"
+    - "Page headers: the bulletin date, liturgical day name, or any line printed at the very top of the page (e.g. 'May 18, 2025 — 7th Sunday of Easter')"
+    - "Page footers: any line at the bottom referencing DiscoverMass, bulletin printing services, or parish website URLs printed as footer (e.g. 'View this bulletin online at www.DiscoverMass.com')"
+
+image_generation:
+  prompt_mode: python  # "python" = prompt mais rígido | "claude" = prompt mais criativo
+
+content_rules:
+  term_replacements:
+    - description: "Replace the ecclesial type term in the parish name with 'Parish' across all generated text content"
+      scope: "parish_name_references"
+      languages:
+        en:
+          from: "Church"
+          to: "Parish"
+        pt:
+          from: "Igreja"
+          to: "Paróquia"
+        es:
+          from: "Iglesia"
+          to: "Parroquia"

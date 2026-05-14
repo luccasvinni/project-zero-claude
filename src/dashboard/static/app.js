@@ -30,7 +30,7 @@ function _clearActiveContentGen() {
 }
 
 const _sourceView = {};
-const _cropState = { annId: null, page: null, drawing: false, sx: 0, sy: 0, ex: 0, ey: 0, sel: null, zoom: 1.0, baseW: null, panMode: false };
+const _cropState = { annId: null, page: null, drawing: false, sx: 0, sy: 0, ex: 0, ey: 0, sel: null, zoom: 1.0, baseW: null, panMode: false, fromComparison: false };
 const ZOOM_STEPS = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0];
 const _compareState = {
   annId: null,
@@ -1194,6 +1194,8 @@ function toggleSourceImage(id) {
 
   if (_sourceView[id]) {
     imgEl.src = `/api/image/${parishId}/${dateStr}/${id}`;
+    imgEl.style.objectFit = '';
+    imgEl.style.background = '';
     _sourceView[id] = false;
     if (sourceBtn) { sourceBtn.classList.add('btn-secondary'); sourceBtn.classList.remove('btn-primary'); }
     if (sourceBtnIcon) sourceBtnIcon.style.filter = 'brightness(0) opacity(.5)';
@@ -1201,6 +1203,8 @@ function toggleSourceImage(id) {
     if (dlBtn) dlBtn.href = `/api/image/${parishId}/${dateStr}/${id}`;
   } else {
     imgEl.src = `/api/source-crop/${parishId}/${dateStr}/${id}?t=${Date.now()}`;
+    imgEl.style.objectFit = 'contain';
+    imgEl.style.background = '#f1f5f9';
     _sourceView[id] = true;
     if (sourceBtn) { sourceBtn.classList.remove('btn-secondary'); sourceBtn.classList.add('btn-primary'); }
     if (sourceBtnIcon) sourceBtnIcon.style.filter = 'brightness(0) invert(1)';
@@ -1581,6 +1585,7 @@ async function _doRegenFromCrop(updateTexts) {
     if (job.status === 'done') {
       _clearActiveImageGen();
       setSaving(false);
+      _cropState.fromComparison = false;
       closeModal('crop-modal');
       resetRegenArea(annId, 'image');
       if (_sourceView[annId]) toggleSourceImage(annId);
@@ -1666,7 +1671,58 @@ function selectHtmlChoice(choice) {
 
 function closeCompareModal() {
   closeModal('compare-modal');
+  _hideCompareSource();
   _resetCompareState();
+}
+
+function _hideCompareSource() {
+  const row = document.getElementById('compare-source-row');
+  const btn = document.getElementById('compare-source-btn');
+  const icon = document.getElementById('compare-source-btn-icon');
+  const label = document.getElementById('compare-source-btn-label');
+  if (row) row.style.display = 'none';
+  if (btn) { btn.classList.add('btn-secondary'); btn.classList.remove('btn-primary'); }
+  if (icon) icon.style.filter = 'brightness(0) opacity(.5)';
+  if (label) label.textContent = ' Ver imagem fonte';
+}
+
+function toggleCompareSource() {
+  const { annId } = _compareState;
+  if (!annId) return;
+  const row = document.getElementById('compare-source-row');
+  const img = document.getElementById('compare-source-img');
+  const btn = document.getElementById('compare-source-btn');
+  const icon = document.getElementById('compare-source-btn-icon');
+  const label = document.getElementById('compare-source-btn-label');
+  const visible = row && row.style.display !== 'none';
+  if (visible) {
+    if (row) row.style.display = 'none';
+    if (btn) { btn.classList.add('btn-secondary'); btn.classList.remove('btn-primary'); }
+    if (icon) icon.style.filter = 'brightness(0) opacity(.5)';
+    if (label) label.textContent = ' Ver imagem fonte';
+  } else {
+    if (img) img.src = `/api/source-crop/${parishId}/${dateStr}/${annId}?t=${Date.now()}`;
+    if (row) row.style.display = 'block';
+    if (btn) { btn.classList.remove('btn-secondary'); btn.classList.add('btn-primary'); }
+    if (icon) icon.style.filter = 'brightness(0) invert(1)';
+    if (label) label.textContent = ' Ver imagem gerada';
+  }
+}
+
+async function reopenCropFromComparison() {
+  const { annId } = _compareState;
+  if (!annId) return;
+  closeModal('compare-modal');
+  _cropState.fromComparison = true;
+  await openManualCrop(annId);
+}
+
+function cancelCrop() {
+  closeModal('crop-modal');
+  if (_cropState.fromComparison) {
+    _cropState.fromComparison = false;
+    document.getElementById('compare-modal').classList.add('open');
+  }
 }
 
 async function confirmComparison() {
@@ -1677,13 +1733,14 @@ async function confirmComparison() {
   if (confirmBtn) confirmBtn.disabled = true;
 
   if (hasImage) {
+    const imgEl = document.getElementById(`img-${annId}`);
+    if (imgEl) { imgEl.style.objectFit = ''; imgEl.style.background = ''; }
+    if (_sourceView[annId]) { _sourceView[annId] = false; }
     if (imageChoice === 'new') {
       fetch(`/api/image-backup/${parishId}/${dateStr}/${annId}`, { method: 'DELETE' });
-      const imgEl = document.getElementById(`img-${annId}`);
       if (imgEl) imgEl.src = `/api/image/${parishId}/${dateStr}/${annId}?t=${Date.now()}`;
     } else {
       await fetch(`/api/restore-image/${parishId}/${dateStr}/${annId}`, { method: 'POST' });
-      const imgEl = document.getElementById(`img-${annId}`);
       if (imgEl) imgEl.src = `/api/image/${parishId}/${dateStr}/${annId}?t=${Date.now()}`;
     }
   }
