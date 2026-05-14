@@ -28,8 +28,42 @@
   </div>
 </div>
 
+<!-- LISTA GERAL BAR -->
+<div id="lista-geral-bar">
+  <div class="lista-geral-header" onclick="toggleListaGeral()">
+    <svg id="lista-geral-icon" width="15" height="15" viewBox="0 0 14 14" fill="none" style="transition:transform .2s;flex-shrink:0;color:currentColor"><path d="M3 5l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    Lista geral
+    <span id="lista-geral-counts" style="font-weight:400;color:var(--c-text-pale);margin-left:.25rem"></span>
+  </div>
+  <div id="lista-geral-body" style="display:none">
+    <div class="lista-geral-grid">
+
+      <div class="lista-col" id="col-aprovados">
+        <div class="lista-col-header" style="color:#065f46;border-bottom-color:#6ee7b7">✓ Aprovados</div>
+        <div id="lista-aprovados" class="lista-col-items"></div>
+      </div>
+      <div class="lista-col" id="col-descartados">
+        <div class="lista-col-header" style="color:#991b1b;border-bottom-color:#fca5a5">✕ Descartados</div>
+        <div id="lista-descartados" class="lista-col-items"></div>
+      </div>
+      <div class="lista-col" id="col-pendentes">
+        <div class="lista-col-header" style="color:#92400e;border-bottom-color:#fcd34d">⚠ Pendentes</div>
+        <div id="lista-pendentes" class="lista-col-items"></div>
+      </div>
+      <div class="lista-col-actions">
+        <button class="btn btn-primary btn-sm" onclick="publishRun()" style="width:100%">Publicar</button>
+        <button class="btn btn-secondary btn-sm" onclick="clearRun()" style="width:100%">Limpar</button>
+      </div>
+    </div>
+    <div onclick="toggleListaGeral()" style="display:flex;align-items:center;justify-content:center;gap:.4rem;width:100%;padding:.55rem 3rem;background:#f1f5f9;cursor:pointer;border-top:1px solid var(--c-border);font-size:.68rem;font-weight:600;color:var(--c-text-2);letter-spacing:.03em;text-transform:uppercase;font-family:inherit;transition:background var(--t-fast)" onmouseover="this.style.background='#e2e8f0'" onmouseout="this.style.background='#f1f5f9'">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="transform:rotate(180deg);flex-shrink:0"><path d="M3 5l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Recolher
+    </div>
+  </div>
+</div>
+
 <!-- PROGRESS STRIP -->
-<div class="progress-strip" id="progress-strip">
+<div class="progress-strip" id="progress-strip" style="display:none">
   <div class="progress-steps" id="progress-steps-bar"></div>
   <div class="progress-detail-text" id="progress-detail-text" style="display:none"></div>
 </div>

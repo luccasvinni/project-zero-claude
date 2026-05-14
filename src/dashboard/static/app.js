@@ -215,14 +215,131 @@ function renderGrid() {
   }
   grid.innerHTML = allAnnouncements.map(ann => cardHtml(ann)).join('');
   allAnnouncements.forEach(ann => {
+    ann.status = 'pending';
     renderPreviewFrame(ann);
     initTabs(ann.id);
+    const badgeEl = document.getElementById(`status-badge-${ann.id}`);
+    if (badgeEl) badgeEl.innerHTML = approvalBadgeHtml(ann.status);
+    const cardEl = document.getElementById(`card-${ann.id}`);
+    if (cardEl) cardEl.style.borderColor = '#fcd34d';
+  });
+  updateListaGeral();
+}
+
+function toggleListaGeral() {
+  const body  = document.getElementById('lista-geral-body');
+  const icon  = document.getElementById('lista-geral-icon');
+  if (!body) return;
+  const open = body.style.display !== 'none';
+  body.style.display = open ? 'none' : 'block';
+  if (icon) icon.style.transform = open ? '' : 'rotate(180deg)';
+}
+
+function updateListaGeral() {
+  const aprovados   = allAnnouncements.filter(a => a.status === 'approved');
+  const descartados = allAnnouncements.filter(a => a.status === 'discarded');
+  const pendentes   = allAnnouncements.filter(a => a.status !== 'approved' && a.status !== 'discarded');
+
+  const empty = '<span class="lista-item-empty">Nenhum</span>';
+  const items = list => list.length
+    ? list.map(a => `<span class="lista-item" draggable="true" data-ann-id="${a.id}" title="${escHtml(a.title || '')}">${escHtml(a.title || '(sem título)')}</span>`).join('')
+    : empty;
+
+  const el = id => document.getElementById(id);
+  if (el('lista-aprovados'))   el('lista-aprovados').innerHTML   = items(aprovados);
+  if (el('lista-descartados')) el('lista-descartados').innerHTML = items(descartados);
+  if (el('lista-pendentes'))   el('lista-pendentes').innerHTML   = items(pendentes);
+
+  const counts = el('lista-geral-counts');
+  if (counts) counts.textContent =
+    `${aprovados.length} aprovados · ${descartados.length} descartados · ${pendentes.length} pendentes`;
+
+  _setupListaDnd();
+}
+
+function _setupListaDnd() {
+  const cols = [
+    { itemsId: 'lista-aprovados',   zoneId: 'col-aprovados',   status: 'approved'  },
+    { itemsId: 'lista-descartados', zoneId: 'col-descartados', status: 'discarded'  },
+    { itemsId: 'lista-pendentes',   zoneId: 'col-pendentes',   status: 'pending'    },
+  ];
+
+  cols.forEach(({ itemsId, zoneId, status }) => {
+    const items = document.getElementById(itemsId);
+    const zone  = document.getElementById(zoneId);
+    if (!items || !zone) return;
+
+    // clone node to remove any previously attached listeners
+    const freshZone = zone.cloneNode(true);
+    zone.parentNode.replaceChild(freshZone, zone);
+    const z = document.getElementById(zoneId);
+
+    z.querySelectorAll('.lista-item[draggable]').forEach(item => {
+      item.addEventListener('dragstart', e => {
+        e.dataTransfer.setData('text/plain', item.dataset.annId);
+        e.dataTransfer.effectAllowed = 'move';
+        setTimeout(() => item.style.opacity = '.4', 0);
+      });
+      item.addEventListener('dragend', () => { item.style.opacity = ''; });
+    });
+
+    let enterCount = 0;
+    z.addEventListener('dragenter', e => {
+      e.preventDefault();
+      enterCount++;
+      z.classList.add('lista-drop-over');
+    });
+    z.addEventListener('dragleave', () => {
+      enterCount--;
+      if (enterCount <= 0) { enterCount = 0; z.classList.remove('lista-drop-over'); }
+    });
+    z.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+    });
+    z.addEventListener('drop', e => {
+      e.preventDefault();
+      enterCount = 0;
+      z.classList.remove('lista-drop-over');
+      const annId = e.dataTransfer.getData('text/plain');
+      if (annId) applyAnnStatus(annId, status);
+    });
+  });
+}
+
+function publishRun() { showToast('Publicação ainda não implementada.'); }
+
+function clearRun() {
+  const cancelBtn = document.querySelector('#confirm-modal .btn-secondary');
+  if (cancelBtn) cancelBtn.textContent = 'Não';
+  const okBtn = document.getElementById('confirm-ok-btn');
+  if (okBtn) okBtn.textContent = 'Sim';
+  showConfirm('Você quer limpar todas as escolhas?', () => {
+    allAnnouncements.forEach(ann => {
+      if (ann.status === 'approved' || ann.status === 'discarded') {
+        ann.status = 'pending';
+        _setNeutralButtons(ann.id);
+        _updateStatusBadge(ann.id, ann);
+        fetch(`/api/set-status/${parishId}/${dateStr}/${ann.id}`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({status: 'pending'}),
+        });
+      }
+    });
+    updateListaGeral();
   });
 }
 
 function statusBadge(status) {
   if (status === 'needs_review') return '<span class="badge badge-review">Revisão</span>';
   return '';
+}
+
+function approvalBadgeHtml(status) {
+  if (status === 'approved') return '<span style="background:#d1fae5;border:1px solid #6ee7b7;color:#065f46;font-size:.6rem;font-weight:700;padding:3px 9px;border-radius:20px;letter-spacing:.04em;white-space:nowrap">✓ Aprovado</span>';
+  if (status === 'discarded') return '<span style="background:rgba(241,245,249,.9);border:1px solid #cbd5e1;color:#64748b;font-size:.6rem;font-weight:700;padding:3px 9px;border-radius:20px;letter-spacing:.04em;white-space:nowrap">Descartado</span>';
+  return '<span style="background:rgba(255,251,235,.95);border:1px solid #fcd34d;color:#92400e;font-size:.6rem;font-weight:700;padding:3px 9px;border-radius:20px;letter-spacing:.04em;white-space:nowrap;display:inline-flex;align-items:center;gap:4px">⚠ Pendente</span>';
 }
 
 function cardHtml(ann) {
@@ -244,6 +361,7 @@ function cardHtml(ann) {
         <img src="/static/icon-refresh.png" style="width:26px;height:26px;object-fit:contain;filter:brightness(0) invert(18%) sepia(55%) saturate(800%) hue-rotate(185deg) brightness(60%) contrast(95%);animation:spin .7s linear infinite">
         <span id="img-gen-overlay-text-${id}" style="font-size:.9rem;font-weight:600;color:#1a3a5c">Gerando...</span>
       </div>
+      <div id="status-badge-${id}" style="position:absolute;top:8px;left:8px;z-index:4;pointer-events:none"></div>
     </div>
 
     ${ann.has_image ? `
@@ -264,25 +382,26 @@ function cardHtml(ann) {
     ` : ''}
 
     <div class="card-body">
-      <div class="card-meta">
-        ${bulletinFmt ? `<span class="card-run-date">BOLETIM <strong>${bulletinFmt}</strong> | DATA DO EVENTO <strong style="text-transform:uppercase">${eventFmt}</strong></span>` : ''}
-      </div>
+<div style="font-size:1.4rem;font-weight:700;color:#1a1a2e;line-height:1.3">${escHtml(ann.title || '')}</div>
 
-      <div style="font-size:1.4rem;font-weight:700;color:#1a1a2e;line-height:1.3">${escHtml(ann.title || '')}</div>
+      ${reviewIssues || ann.status === 'needs_review' ? `
+      <div class="review-notes" id="review-wrap-${id}">
+        <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none" onclick="toggleReviewPanel('${id}')">
+          <span class="badge badge-review">Revisão</span>
+          <div style="display:flex;align-items:center;gap:.5rem">
+            <button id="review-regen-btn-${id}" class="btn-instr" style="display:none;margin-left:0;border-color:#f59e0b;color:#b45309" onclick="event.stopPropagation();reviewAnn('${id}')"><img src="/static/icon-refresh.png" alt="" style="filter:brightness(0) saturate(100%) invert(32%) sepia(90%) saturate(800%) hue-rotate(10deg) brightness(88%) contrast(100%)"><span class="btn-instr-text">REVISAR NOVAMENTE</span></button>
+            <svg id="review-chevron-${id}" width="16" height="16" viewBox="0 0 14 14" fill="none" style="transition:transform .2s;flex-shrink:0;color:#b45309"><path d="M3 5l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+        </div>
+        <div id="review-body-${id}" style="display:none;margin-top:.65rem">
+          ${reviewIssues}
+        </div>
+      </div>` : `
+      <div id="review-wrap-${id}" style="background:#f8fafc;border-radius:var(--radius-sm);border-left:3px solid #e2e8f0;padding:.6rem .7rem;opacity:.55;filter:grayscale(1);display:flex;align-items:center;min-height:2.85rem">
+        <span style="font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8">✓ Sem revisões sugeridas</span>
+      </div>`}
 
-      <div class="review-notes" id="review-wrap-${id}" ${reviewIssues || ann.status === 'needs_review' ? '' : 'style="background:transparent;border:none;padding:.1rem 0"'}>
-        ${reviewIssues || ann.status === 'needs_review'
-          ? `<div style="display:flex;justify-content:space-between;align-items:center${reviewIssues ? ';margin-bottom:.6rem' : ''}">
-              ${statusBadge(ann.status)}
-              <button class="btn-instr" style="margin-left:0;border-color:#f59e0b;color:#b45309" onclick="reviewAnn('${id}')"><img src="/static/icon-refresh.png" alt="" style="filter:brightness(0) saturate(100%) invert(32%) sepia(90%) saturate(800%) hue-rotate(10deg) brightness(88%) contrast(100%)"><span class="btn-instr-text">REVISAR NOVAMENTE</span></button>
-            </div>`
-          : `<div style="display:flex;justify-content:space-between;align-items:center;border:1.5px solid #10b981;border-radius:20px;padding:4px 10px 4px 14px;color:#059669${reviewIssues ? ';margin-bottom:.6rem' : ''}">
-              <span style="font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em">✓ APROVADO NA REVISÃO</span>
-              <button class="btn-instr" style="margin-left:0;border-color:#10b981;color:#059669" onclick="reviewAnn('${id}')"><img src="/static/icon-refresh.png" alt="" style="filter:brightness(0) saturate(100%) invert(63%) sepia(40%) saturate(800%) hue-rotate(120deg) brightness(95%) contrast(95%)"><span class="btn-instr-text">REVISAR NOVAMENTE</span></button>
-            </div>`}
-        ${reviewIssues}
-      </div>
-
+      <div id="card-expand-${id}" style="display:none;margin-top:-.25rem">
       <div class="rating-section">
         <div class="rating-row">
           <span class="rating-label">Imagem</span>
@@ -302,7 +421,7 @@ function cardHtml(ann) {
           </div>
         </div>
 
-        <div class="rating-row" style="margin-top:.35rem">
+        <div class="rating-row">
           <span class="rating-label">Textos</span>
           <div class="stars" id="html-stars-${id}">${starsHtml(id, 'html', ann.rating?.html || 0)}</div>
           <span class="rating-saved" id="html-saved-${id}">✓</span>
@@ -404,9 +523,15 @@ function cardHtml(ann) {
       </div>
 
       <div class="card-actions">
-        <button class="btn btn-secondary btn-sm" onclick="copyHtml('${id}')"><img src="/static/icon-copy.png" alt="" style="width:13px;height:13px;object-fit:contain"> Copiar HTML</button>
-        <button class="btn btn-danger btn-sm" onclick="openCorrections('${id}')"><img src="/static/icon-suggest.png" alt="" style="width:13px;height:13px;object-fit:contain"> Corrigir erros</button>
+        <button id="approve-btn-${id}" class="btn btn-sm" style="background:#fff;color:#065f46;border:1px solid #6ee7b7" onclick="approveAnn('${id}')">✓ Aprovar</button>
+        <button id="discard-btn-${id}" class="btn btn-sm" style="background:#fff;color:#991b1b;border:1px solid #fca5a5" onclick="discardAnn('${id}')"><span style="font-size:.85rem;line-height:1">✕</span> Descartar</button>
       </div>
+      </div><!-- /card-expand -->
+
+      <button id="card-toggle-${id}" class="card-expand-btn" onclick="toggleCard('${id}')">
+        <svg id="card-toggle-icon-${id}" width="14" height="14" viewBox="0 0 14 14" fill="none" style="transition:transform .2s;flex-shrink:0"><path d="M3 5l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span id="card-toggle-label-${id}">Ver conteúdo completo</span>
+      </button>
     </div>
   </div>`;
 }
@@ -513,6 +638,33 @@ function refreshPreview(id) {
   if (activeLang) renderLangFrame(id, activeLang);
 }
 
+async function applyAnnStatus(id, newStatus) {
+  const ann = allAnnouncements.find(a => String(a.id) === String(id));
+  if (!ann || ann.status === newStatus) return;
+  await fetch(`/api/set-status/${parishId}/${dateStr}/${id}`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({status: newStatus}),
+  });
+  ann.status = newStatus;
+  const card = document.getElementById(`card-${id}`);
+  const approveBtn = document.getElementById(`approve-btn-${id}`);
+  const discardBtn = document.getElementById(`discard-btn-${id}`);
+  if (newStatus === 'approved') {
+    if (approveBtn) { approveBtn.textContent = '✓ Aprovado'; approveBtn.style.cssText = 'background:#d1fae5;color:#065f46;border:1px solid #6ee7b7'; }
+    if (discardBtn) { discardBtn.innerHTML = '<span style="font-size:.85rem;line-height:1">✕</span> Descartar'; discardBtn.style.cssText = 'background:#fff;color:#991b1b;border:1px solid #fca5a5'; }
+    if (card) { card.style.borderColor = '#6ee7b7'; card.style.opacity = ''; card.style.filter = ''; }
+  } else if (newStatus === 'discarded') {
+    if (discardBtn) { discardBtn.innerHTML = '<span style="font-size:.85rem;line-height:1">✕</span> Descartado'; discardBtn.style.cssText = 'background:#fee2e2;color:#991b1b;border:1px solid #fca5a5'; }
+    if (approveBtn) { approveBtn.textContent = '✓ Aprovar'; approveBtn.style.cssText = 'background:#fff;color:#065f46;border:1px solid #6ee7b7'; }
+    if (card) { card.style.borderColor = '#fca5a5'; card.style.opacity = '0.55'; card.style.filter = 'grayscale(1)'; }
+  } else {
+    _setNeutralButtons(id);
+  }
+  _updateStatusBadge(id, ann);
+  updateListaGeral();
+}
+
 function initTabs(id) {}
 function switchTab(id, tab) {
   if (_inlineEdit[id] && tab !== _inlineEdit[id].lang) cancelInlineEdit(id, true);
@@ -524,17 +676,100 @@ function switchTab(id, tab) {
 }
 
 // --- Copy HTML ---
-function copyHtml(id) {
-  const html = document.getElementById(`editor-${id}`).value;
-  navigator.clipboard.writeText(html).then(() => {
-    const btn = document.querySelector(`button[onclick="copyHtml('${id}')"]`);
-    if (!btn) return;
-    const orig = btn.innerHTML;
-    const origStyle = btn.getAttribute('style') || '';
-    btn.innerHTML = '<span style="font-size:.9rem;line-height:1">✓</span> HTML COPIADO';
-    btn.style.cssText = (origStyle ? origStyle + ';' : '') + 'background:#d1fae5;color:#065f46;border-color:#6ee7b7;';
-    setTimeout(() => { btn.innerHTML = orig; btn.setAttribute('style', origStyle); }, 2500);
-  });
+function _setNeutralButtons(id) {
+  const approveBtn = document.getElementById(`approve-btn-${id}`);
+  const discardBtn = document.getElementById(`discard-btn-${id}`);
+  if (approveBtn) { approveBtn.textContent = '✓ Aprovar'; approveBtn.style.cssText = 'background:#fff;color:#065f46;border:1px solid #6ee7b7'; }
+  if (discardBtn) { discardBtn.innerHTML = '<span style="font-size:.85rem;line-height:1">✕</span> Descartar'; discardBtn.style.cssText = 'background:#fff;color:#991b1b;border:1px solid #fca5a5'; }
+  const card = document.getElementById(`card-${id}`);
+  if (card) { card.style.borderColor = '#fcd34d'; card.style.opacity = ''; card.style.filter = ''; }
+  updateListaGeral();
+}
+
+async function approveAnn(id) {
+  const ann = allAnnouncements.find(a => String(a.id) === String(id));
+  if (!ann) return;
+  const toggling = ann.status === 'approved';
+  const newStatus = toggling ? 'pending' : 'approved';
+  try {
+    await fetch(`/api/set-status/${parishId}/${dateStr}/${id}`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({status: newStatus}),
+    });
+    ann.status = newStatus;
+    if (toggling) {
+      _setNeutralButtons(id);
+    } else {
+      const btn = document.getElementById(`approve-btn-${id}`);
+      if (btn) { btn.textContent = '✓ Aprovado'; btn.style.cssText = 'background:#d1fae5;color:#065f46;border:1px solid #6ee7b7'; }
+      const discardBtn = document.getElementById(`discard-btn-${id}`);
+      if (discardBtn) { discardBtn.innerHTML = '<span style="font-size:.85rem;line-height:1">✕</span> Descartar'; discardBtn.style.cssText = 'background:#fff;color:#991b1b;border:1px solid #fca5a5'; }
+      const card = document.getElementById(`card-${id}`);
+      if (card) { card.style.borderColor = '#6ee7b7'; card.style.opacity = ''; card.style.filter = ''; }
+    }
+    _updateStatusBadge(id, ann);
+    updateListaGeral();
+  } catch(e) {}
+}
+
+async function discardAnn(id) {
+  const ann = allAnnouncements.find(a => String(a.id) === String(id));
+  if (!ann) return;
+  const toggling = ann.status === 'discarded';
+  const newStatus = toggling ? 'pending' : 'discarded';
+  try {
+    await fetch(`/api/set-status/${parishId}/${dateStr}/${id}`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({status: newStatus}),
+    });
+    ann.status = newStatus;
+    if (toggling) {
+      _setNeutralButtons(id);
+    } else {
+      const btn = document.getElementById(`discard-btn-${id}`);
+      if (btn) { btn.innerHTML = '<span style="font-size:.85rem;line-height:1">✕</span> Descartado'; btn.style.cssText = 'background:#fee2e2;color:#991b1b;border:1px solid #fca5a5'; }
+      const approveBtn = document.getElementById(`approve-btn-${id}`);
+      if (approveBtn) { approveBtn.textContent = '✓ Aprovar'; approveBtn.style.cssText = 'background:#fff;color:#065f46;border:1px solid #6ee7b7'; }
+      const card = document.getElementById(`card-${id}`);
+      if (card) { card.style.borderColor = '#fca5a5'; card.style.opacity = '0.55'; card.style.filter = 'grayscale(1)'; }
+    }
+    _updateStatusBadge(id, ann);
+    updateListaGeral();
+  } catch(e) {}
+}
+
+function _updateStatusBadge(id, ann) {
+  const el = document.getElementById(`status-badge-${id}`);
+  if (el) el.innerHTML = approvalBadgeHtml(ann.status);
+}
+
+function toggleCard(id) {
+  const expand = document.getElementById(`card-expand-${id}`);
+  const icon   = document.getElementById(`card-toggle-icon-${id}`);
+  const label  = document.getElementById(`card-toggle-label-${id}`);
+  if (!expand) return;
+  const open = expand.style.display !== 'none';
+  expand.style.display = open ? 'none' : 'block';
+  if (icon)  icon.style.transform = open ? '' : 'rotate(180deg)';
+  if (label) label.textContent    = open ? 'Ver conteúdo completo' : 'Recolher';
+  if (!open) {
+    const activeLang = ['en','es','pt','source'].find(t =>
+      document.getElementById(`tab-${t}-${id}`)?.classList.contains('active')) || 'en';
+    renderLangFrame(id, activeLang);
+  }
+}
+
+function toggleReviewPanel(id) {
+  const body = document.getElementById(`review-body-${id}`);
+  const chevron = document.getElementById(`review-chevron-${id}`);
+  const regenBtn = document.getElementById(`review-regen-btn-${id}`);
+  if (!body) return;
+  const open = body.style.display !== 'none';
+  body.style.display = open ? 'none' : 'block';
+  if (regenBtn) regenBtn.style.display = open ? 'none' : '';
+  if (chevron) chevron.style.transform = open ? '' : 'rotate(180deg)';
 }
 
 // --- Stars / Rating ---
@@ -992,27 +1227,24 @@ async function reviewAnn(id) {
   if (wrap && ann) {
     const issues = getReviewIssues(ann);
     const hasIssues = !!issues;
-    wrap.style.cssText = (hasIssues || ann.status === 'needs_review') ? '' : 'background:transparent;border:none;padding:.1rem 0';
-    const showBtn = hasIssues || ann.status === 'needs_review';
-    const headerHtml = showBtn
-      ? `<div style="display:flex;justify-content:space-between;align-items:center${hasIssues ? ';margin-bottom:.6rem' : ''}">
-           ${statusBadge(ann.status)}
-           <button class="btn-instr" style="margin-left:0;border-color:#f59e0b;color:#b45309" onclick="reviewAnn('${id}')"><img src="/static/icon-refresh.png" alt="" style="filter:brightness(0) saturate(100%) invert(32%) sepia(90%) saturate(800%) hue-rotate(10deg) brightness(88%) contrast(100%)"><span class="btn-instr-text">REVISAR NOVAMENTE</span></button>
-         </div>`
-      : `<div style="display:flex;justify-content:space-between;align-items:center;border:1.5px solid #10b981;border-radius:20px;padding:4px 10px 4px 14px;color:#059669">
-           <span style="font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em">✓ APROVADO NA REVISÃO</span>
-           <button class="btn-instr" style="margin-left:0;border-color:#10b981;color:#059669" onclick="reviewAnn('${id}')"><img src="/static/icon-refresh.png" alt="" style="filter:brightness(0) saturate(100%) invert(63%) sepia(40%) saturate(800%) hue-rotate(120deg) brightness(95%) contrast(95%)"><span class="btn-instr-text">REVISAR NOVAMENTE</span></button>
-         </div>`;
-    wrap.innerHTML = headerHtml + issues;
-
-    const doneMsg = data.status === 'approved' ? 'Aprovado!' : 'Revisão concluída.';
-    const btn = wrap.querySelector('.btn-instr');
-    if (btn) {
-      const statusEl = document.createElement('span');
-      statusEl.style.cssText = 'font-size:.72rem;color:#059669;margin-left:auto;margin-right:.5rem';
-      statusEl.textContent = doneMsg;
-      btn.parentNode.insertBefore(statusEl, btn);
-      setTimeout(() => statusEl.remove(), 4000);
+    if (hasIssues || ann.status === 'needs_review') {
+      wrap.className = 'review-notes';
+      wrap.style.cssText = '';
+      wrap.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none" onclick="toggleReviewPanel('${id}')">
+          <span class="badge badge-review">Revisão</span>
+          <div style="display:flex;align-items:center;gap:.5rem">
+            <button id="review-regen-btn-${id}" class="btn-instr" style="margin-left:0;border-color:#f59e0b;color:#b45309" onclick="event.stopPropagation();reviewAnn('${id}')"><img src="/static/icon-refresh.png" alt="" style="filter:brightness(0) saturate(100%) invert(32%) sepia(90%) saturate(800%) hue-rotate(10deg) brightness(88%) contrast(100%)"><span class="btn-instr-text">REVISAR NOVAMENTE</span></button>
+            <span id="review-chevron-${id}" style="font-size:1.65rem;color:#b45309;line-height:1;transition:transform .2s;transform:rotate(180deg)">▾</span>
+          </div>
+        </div>
+        <div id="review-body-${id}" style="margin-top:.65rem">
+          ${issues}
+        </div>`;
+    } else {
+      wrap.className = '';
+      wrap.style.cssText = 'background:#f8fafc;border-radius:var(--radius-sm);border-left:3px solid #e2e8f0;padding:.6rem .7rem;opacity:.55;filter:grayscale(1);display:flex;align-items:center;min-height:2.85rem';
+      wrap.innerHTML = '<span style="font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8">✓ Sem revisões sugeridas</span>';
     }
   }
 }
@@ -1082,17 +1314,14 @@ function clearReviewSection(id, type) {
   const wrap = document.getElementById(`review-wrap-${id}`);
   if (!wrap) return;
   const issues = getReviewIssues(ann);
-  const headerEl = wrap.querySelector(':scope > div:first-child');
-  if (headerEl) {
-    let next = headerEl.nextSibling;
-    while (next) { const r = next; next = next.nextSibling; wrap.removeChild(r); }
-    if (issues) {
-      const tmp = document.createElement('div');
-      tmp.innerHTML = issues;
-      while (tmp.firstChild) wrap.appendChild(tmp.firstChild);
-    } else {
-      wrap.style.cssText = 'background:transparent;border:none;padding:.1rem 0';
-    }
+  const body = document.getElementById(`review-body-${id}`);
+  if (issues) {
+    if (body) body.querySelector('div:last-child')?.remove();
+    const tmp = document.createElement('div');
+    tmp.innerHTML = issues;
+    if (body) body.appendChild(tmp.firstChild);
+  } else {
+    wrap.style.cssText = 'display:none';
   }
 }
 

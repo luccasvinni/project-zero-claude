@@ -51,6 +51,21 @@ body { font-family: 'Work Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', 
 .topbar-logo img { height: 42px; display: block; }
 .topbar-right { display: flex; align-items: center; gap: .75rem; }
 
+/* LISTA GERAL BAR */
+#lista-geral-bar { position: sticky; top: 72px; z-index: 99; background: var(--c-bg); border-bottom: 1px solid var(--c-border); box-shadow: var(--shadow-sm); }
+.lista-geral-header { display: flex; align-items: center; gap: .45rem; padding: .6rem 3rem; cursor: pointer; user-select: none; font-size: .72rem; font-weight: 700; color: var(--c-text-2); letter-spacing: .06em; text-transform: uppercase; transition: color var(--t-fast), background var(--t-fast); }
+.lista-geral-header:hover { color: var(--c-primary); background: #f1f5f9; }
+.lista-geral-grid { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 1.5rem; padding: .85rem 3rem 1rem; border-top: 1px solid var(--c-border); align-items: start; }
+.lista-col { display: flex; flex-direction: column; gap: .4rem; min-width: 0; min-height: 60px; }
+.lista-col-header { font-size: .65rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; padding-bottom: .35rem; border-bottom: 1px solid; margin-bottom: .2rem; }
+.lista-col-items { display: flex; flex-direction: column; }
+.lista-item { font-size: .75rem; color: var(--c-text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: .25rem 0; border-bottom: 1px solid #e2e8f0; }
+.lista-item-empty { font-size: .72rem; color: var(--c-text-pale); font-style: italic; }
+.lista-col-actions { display: flex; flex-direction: column; gap: .5rem; justify-content: flex-start; padding-top: 1.35rem; min-width: 110px; }
+.lista-item { cursor: grab; }
+.lista-item:active { cursor: grabbing; }
+.lista-drop-over { background: #f8fafc; border-radius: 6px; outline: 2px dashed #cbd5e1; outline-offset: 3px; }
+
 /* PILL BUTTONS */
 .btn-pill { display: inline-flex; align-items: center; gap: .5rem; padding: 9px 22px; border-radius: var(--radius-full); border: 1.5px solid var(--c-primary); background: transparent; color: var(--c-primary); font-family: 'Work Sans', sans-serif; font-size: .78rem; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; cursor: pointer; touch-action: manipulation; transition: background var(--t-fast), box-shadow var(--t-fast); white-space: nowrap; }
 .btn-pill:hover { background: var(--c-primary-faint); }
@@ -97,7 +112,7 @@ body { font-family: 'Work Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', 
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 1.75rem; padding: 2rem 3rem; }
 
 /* CARD */
-.card { background: var(--c-bg); border-radius: var(--radius-xl); border: 1px solid var(--c-border-2); box-shadow: var(--shadow-md); overflow: hidden; display: flex; flex-direction: column; transition: box-shadow var(--t-base), border-color var(--t-base); }
+.card { background: var(--c-bg); border-radius: var(--radius-xl); border: 1px solid var(--c-border-2); box-shadow: var(--shadow-md); overflow: hidden; display: flex; flex-direction: column; transition: box-shadow var(--t-base), border-color var(--t-base), opacity var(--t-base), filter var(--t-base); }
 .card:hover { box-shadow: var(--shadow-lg); border-color: #d1d9e2; }
 
 /* CARD: image */
@@ -148,7 +163,7 @@ body { font-family: 'Work Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', 
 .badge-cat { border: 1px solid var(--c-border); color: var(--c-text-muted); }
 
 /* REVIEW NOTES */
-.review-notes { background: var(--c-warning-bg); padding: .85rem 1rem; border-radius: var(--radius-sm); border-left: 3px solid var(--c-warning); font-size: .84rem; color: var(--c-warning-text); line-height: 1.55; }
+.review-notes { background: var(--c-warning-bg); padding: .6rem .7rem; border-radius: var(--radius-sm); border-left: 3px solid var(--c-warning); font-size: .84rem; color: var(--c-warning-text); line-height: 1.55; }
 .review-notes ul { margin-left: 1rem; display: flex; flex-direction: column; gap: .2rem; }
 
 /* RATING */
@@ -194,6 +209,8 @@ body { font-family: 'Work Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', 
 
 /* CARD ACTIONS */
 .card-actions { display: flex; gap: .4rem; flex-wrap: wrap; padding-top: .2rem; }
+.card-expand-btn { display: flex; align-items: center; justify-content: center; gap: .4rem; width: 100%; background: none; border: none; border-top: 1px solid var(--c-border); padding: .55rem 0 0; margin-top: auto; cursor: pointer; font-size: .68rem; font-weight: 600; color: var(--c-text-2); letter-spacing: .03em; text-transform: uppercase; font-family: inherit; transition: color var(--t-fast); }
+.card-expand-btn:hover { color: var(--c-primary); }
 .btn { padding: 7px 13px; border-radius: var(--radius-full); font-size: .7rem; font-weight: 600; cursor: pointer; touch-action: manipulation; border: none; transition: background var(--t-fast), box-shadow var(--t-fast), transform var(--t-fast); display: inline-flex; align-items: center; gap: 4px; }
 .btn:active { transform: scale(.97); }
 .btn-primary { background: var(--c-primary); color: #fff; }

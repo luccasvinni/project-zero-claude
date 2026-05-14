@@ -865,6 +865,24 @@ def save_rating(parish_id: str, date: str, ann_id: str, body: RatingRequest):
     return {"ok": True}
 
 
+class SetStatusRequest(BaseModel):
+    status: str  # "approved" | "discarded"
+
+
+@app.post("/api/set-status/{parish_id}/{date}/{ann_id}")
+def set_ann_status(parish_id: str, date: str, ann_id: str, body: SetStatusRequest):
+    if body.status not in ("approved", "discarded", "pending"):
+        raise HTTPException(status_code=400, detail="Status inválido")
+    run_dir = get_run_dir(parish_id, date)
+    report_path = run_dir / "review_report.json"
+    report = json.loads(report_path.read_text()) if report_path.exists() else {}
+    entry = report.get(ann_id, {})
+    entry["status"] = body.status
+    report[ann_id] = entry
+    report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False))
+    return {"ok": True, "status": body.status}
+
+
 class WorkflowStartRequest(BaseModel):
     parish_id: str
     mode: str = "complete"  # "complete" | "images" | "content"
