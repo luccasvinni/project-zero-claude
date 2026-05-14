@@ -25,6 +25,12 @@ output/
 # Claude Code
 .claude/settings.local.json
 
+# Reference/legacy files
+src/prompts/image_generation_instructions.txt
+src/test_gemini_image.py
+briefing.txt
+endpoints.txt
+
 # Jupyter
 .ipynb_checkpoints/
 
