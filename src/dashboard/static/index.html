@@ -113,15 +113,17 @@
     <h3 style="margin-bottom:.25rem">Comparar gerações</h3>
     <p style="font-size:.82rem;color:#94a3b8;margin-bottom:.9rem">Clique na versão que deseja manter e confirme ao final.</p>
 
+    <!-- Source crop preview (independent, toggled via footer button) -->
+    <div id="compare-source-row" style="display:none;margin-bottom:.75rem">
+      <div style="font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#94a3b8;text-align:center;margin-bottom:.4rem">Fonte (boletim)</div>
+      <div style="text-align:center">
+        <img id="compare-source-img" style="max-height:200px;max-width:100%;object-fit:contain;border-radius:8px;border:1px solid #e8ecf0;background:#f8fafc">
+      </div>
+    </div>
+
     <!-- Image section -->
     <div id="compare-image-section" style="display:none">
       <div style="font-size:.63rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#64748b;margin-bottom:.5rem">Imagem</div>
-      <div id="compare-source-row" style="display:none;margin-bottom:.75rem">
-        <div style="font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#94a3b8;text-align:center;margin-bottom:.4rem">Fonte (boletim)</div>
-        <div style="text-align:center">
-          <img id="compare-source-img" style="max-height:200px;max-width:100%;object-fit:contain;border-radius:8px;border:1px solid #e8ecf0;background:#f8fafc">
-        </div>
-      </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;margin-bottom:.75rem">
         <div id="cmp-img-old" onclick="selectImageChoice('old')" style="display:flex;flex-direction:column;gap:.5rem;cursor:pointer;opacity:.45;transition:opacity .2s">
           <div style="font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#94a3b8;text-align:center">Anterior</div>

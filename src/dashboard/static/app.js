@@ -1402,13 +1402,27 @@ function setupCropCanvas() {
     return px > s.left * cw && px < s.right * cw && py > s.top * ch && py < s.bottom * ch;
   }
 
-  canvas.onmousemove = (e) => {
-    if (mode === 'pan') {
+  let _docPanMove = null, _docPanUp = null;
+
+  function _startDocPan() {
+    _docPanMove = (ev) => {
       const scrollEl = document.querySelector('.crop-scroll');
-      scrollEl.scrollLeft = panScrollLeft - (e.clientX - panStartX);
-      scrollEl.scrollTop  = panScrollTop  - (e.clientY - panStartY);
-      return;
-    }
+      scrollEl.scrollLeft = panScrollLeft - (ev.clientX - panStartX);
+      scrollEl.scrollTop  = panScrollTop  - (ev.clientY - panStartY);
+    };
+    _docPanUp = () => {
+      document.removeEventListener('mousemove', _docPanMove);
+      document.removeEventListener('mouseup',   _docPanUp);
+      _docPanMove = null; _docPanUp = null;
+      mode = null;
+      canvas.style.cursor = (_cropState.panMode || _cropState.sel) ? 'grab' : 'crosshair';
+    };
+    document.addEventListener('mousemove', _docPanMove);
+    document.addEventListener('mouseup',   _docPanUp);
+  }
+
+  canvas.onmousemove = (e) => {
+    if (mode === 'pan') return; // handled by document listener
     const { px, py, x, y } = pct(e);
     if (mode === 'draw') {
       drawCropRect(Math.min(_cropState.sx, x), Math.min(_cropState.sy, y),
@@ -1436,11 +1450,10 @@ function setupCropCanvas() {
       _cropState.sel = { left, top, right, bottom };
       drawCropRect(left, top, right, bottom);
     } else {
-      // Handles always take priority over panMode
       const h = hitHandle(px, py);
       if (h) { canvas.style.cursor = h.cursor; return; }
       if (isInsideSel(px, py)) { canvas.style.cursor = 'grab'; return; }
-      canvas.style.cursor = _cropState.panMode ? 'grab' : 'crosshair';
+      canvas.style.cursor = (_cropState.panMode || _cropState.sel) ? 'grab' : 'crosshair';
     }
   };
 
@@ -1448,22 +1461,20 @@ function setupCropCanvas() {
     const { px, py, x, y } = pct(e);
     const h = hitHandle(px, py);
     if (h) {
-      // Handles always win, even in panMode
       mode = 'resize'; activeHandle = h;
       canvas.style.cursor = h.cursor;
     } else if (isInsideSel(px, py)) {
-      // Interior of selection: move in both modes
       mode = 'move';
       moveOfsX = x - _cropState.sel.left;
       moveOfsY = y - _cropState.sel.top;
       canvas.style.cursor = 'grabbing';
-    } else if (_cropState.panMode) {
-      // Empty space + panMode: pan the canvas
+    } else if (_cropState.panMode || _cropState.sel) {
       mode = 'pan';
       panStartX = e.clientX; panStartY = e.clientY;
       const scrollEl = document.querySelector('.crop-scroll');
       panScrollLeft = scrollEl.scrollLeft; panScrollTop = scrollEl.scrollTop;
       canvas.style.cursor = 'grabbing';
+      _startDocPan();
     } else {
       mode = 'draw';
       _cropState.sx = x; _cropState.sy = y; _cropState.ex = x; _cropState.ey = y;
@@ -1472,11 +1483,7 @@ function setupCropCanvas() {
   };
 
   canvas.onmouseup = (e) => {
-    if (mode === 'pan') {
-      mode = null;
-      canvas.style.cursor = 'grab';
-      return;
-    }
+    if (mode === 'pan') return; // handled by document listener
     const { px, py, x, y } = pct(e);
     if (mode === 'draw') {
       _cropState.sel = {
@@ -1489,7 +1496,7 @@ function setupCropCanvas() {
     canvas.style.cursor = h ? h.cursor : (isInsideSel(px, py) ? 'grab' : 'crosshair');
   };
 
-  canvas.onmouseleave = (e) => { if (mode) canvas.onmouseup(e); };
+  canvas.onmouseleave = (e) => { if (mode && mode !== 'pan') canvas.onmouseup(e); };
 }
 
 async function _persistCropSel() {

@@ -127,6 +127,8 @@ def locate_announcements(client: anthropic.Anthropic, pages_dir: Path, announcem
 
 def crop_announcement(pages_dir: Path, location: dict, padding: int = 12) -> Image.Image:
     """Recorta a região do anúncio da página com padding."""
+    if location.get("manual"):
+        padding = 0
     page_num = location["page"]
     img_path = pages_dir / f"page_{page_num:02d}.png"
     page_img = Image.open(img_path).convert("RGB")
