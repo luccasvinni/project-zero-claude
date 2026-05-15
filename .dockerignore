@@ -1,0 +1,15 @@
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.env
+.git
+.gitignore
+node_modules
+output
+venv
+.venv
+dist
+build
+.cache
+playwright-report

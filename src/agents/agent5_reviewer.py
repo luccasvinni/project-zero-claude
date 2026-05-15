@@ -10,6 +10,9 @@ import anthropic
 from PIL import Image
 from dotenv import load_dotenv
 
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from log_ai import log_ai_tokens
+
 load_dotenv()
 
 MAX_RETRIES = 2
@@ -149,6 +152,7 @@ def review_announcement(
     img_path: Path,
     html_path: Path,
     source_crop: "Image.Image | None" = None,
+    atimo_team: bool = False,
 ) -> dict:
     """Envia imagem fonte + imagem gerada + HTML ao Claude para revisão."""
     html_content = html_path.read_text(encoding="utf-8") if html_path.exists() else ""
@@ -203,6 +207,7 @@ def review_announcement(
         system=REVIEW_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": content}],
     )
+    log_ai_tokens(response, task="reviewer_review", atimo_team=atimo_team)
 
     raw = response.content[0].text.strip()
     if raw.startswith("```"):
@@ -222,7 +227,7 @@ def review_announcement(
     return result
 
 
-async def trigger_agent_4a(output_dir: Path, parish_id: str, ann_id: str):
+async def trigger_agent_4a(output_dir: Path, parish_id: str, ann_id: str, atimo_team: bool = False):
     """Aciona o Agente 4A para regenerar a imagem de um anúncio específico."""
     sys.path.insert(0, str(Path(__file__).parent))
     from agent4a_image import (
@@ -265,7 +270,7 @@ async def trigger_agent_4a(output_dir: Path, parish_id: str, ann_id: str):
     print(f"    Imagem regenerada: {out_path}")
 
 
-async def trigger_agent_4b(output_dir: Path, parish_id: str, ann_id: str, spelling_errors: list[str]):
+async def trigger_agent_4b(output_dir: Path, parish_id: str, ann_id: str, spelling_errors: list[str], atimo_team: bool = False):
     """Aciona o Agente 4B para regenerar o HTML de um anúncio específico."""
     sys.path.insert(0, str(Path(__file__).parent))
     from agent4b_html import load_system_prompt, generate_html_for_announcement, detect_qr_codes
@@ -288,13 +293,13 @@ async def trigger_agent_4b(output_dir: Path, parish_id: str, ann_id: str, spelli
             f'<span style="color:red; font-weight: bold;">: {", ".join(spelling_errors)}'
         )
 
-    html = await generate_html_for_announcement(client, ann, system_prompt, qr_urls)
+    html = await generate_html_for_announcement(client, ann, system_prompt, qr_urls, atimo_team=atimo_team)
     out_path = output_dir / "html" / f"announcement_{ann_id.zfill(2)}.html"
     out_path.write_text(html, encoding="utf-8")
     print(f"    HTML regenerado: {out_path}")
 
 
-async def run(output_dir: Path, parish_id: str) -> dict:
+async def run(output_dir: Path, parish_id: str, atimo_team: bool = False) -> dict:
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
     announcements_path = output_dir / "announcements.json"
@@ -343,7 +348,7 @@ async def run(output_dir: Path, parish_id: str) -> dict:
             attempt += 1
             print(f"  Tentativa {attempt}/{MAX_RETRIES + 1}...")
 
-            review = review_announcement(client, ann, img_path, html_path, source_crop)
+            review = review_announcement(client, ann, img_path, html_path, source_crop, atimo_team=atimo_team)
 
             if review["overall_approved"]:
                 print(f"  APROVADO.")
@@ -365,11 +370,11 @@ async def run(output_dir: Path, parish_id: str) -> dict:
             # Regenera o que for necessário (só executa se AUTO_REGEN = True)
             if not review["image"]["approved"]:
                 print(f"  Acionando Agente 4A para regenerar imagem...")
-                await trigger_agent_4a(output_dir, parish_id, ann_id)
+                await trigger_agent_4a(output_dir, parish_id, ann_id, atimo_team=atimo_team)
 
             if not review["html"]["approved"]:
                 print(f"  Acionando Agente 4B para regenerar HTML...")
-                await trigger_agent_4b(output_dir, parish_id, ann_id, spelling)
+                await trigger_agent_4b(output_dir, parish_id, ann_id, spelling, atimo_team=atimo_team)
 
         final_status = "approved" if review and review["overall_approved"] else "needs_review"
         report[ann_id] = {

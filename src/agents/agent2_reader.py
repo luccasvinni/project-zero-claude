@@ -10,6 +10,10 @@ import pdfplumber
 from pdf2image import convert_from_path
 from dotenv import load_dotenv
 
+import sys
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from log_ai import log_ai_tokens
+
 load_dotenv()
 
 PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
@@ -215,7 +219,7 @@ def parse_announcements(response_text: str) -> list[dict]:
     return announcements
 
 
-def consolidate_multilingual_duplicates(announcements: list[dict], client: anthropic.Anthropic) -> list[dict]:
+def consolidate_multilingual_duplicates(announcements: list[dict], client: anthropic.Anthropic, atimo_team: bool = False) -> list[dict]:
     """Segunda passagem: identifica e consolida anúncios do mesmo evento em idiomas diferentes."""
     if len(announcements) < 2:
         return announcements
@@ -255,6 +259,7 @@ ANNOUNCEMENTS:
         system=system,
         messages=[{"role": "user", "content": prompt}],
     )
+    log_ai_tokens(response, task="reader_consolidate", atimo_team=atimo_team)
 
     consolidated = parse_announcements(response.content[0].text)
 
@@ -267,7 +272,7 @@ ANNOUNCEMENTS:
     return consolidated
 
 
-async def run(pdf_path: Path, parish_id: str, instruction: str = "") -> list[dict]:
+async def run(pdf_path: Path, parish_id: str, instruction: str = "", atimo_team: bool = False) -> list[dict]:
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     exclusion_rules = _load_exclusion_rules(parish_id)
     system_prompt = (PROMPTS_DIR / "system_prompt.txt").read_text().replace("{exclusion_rules}", exclusion_rules)
@@ -287,12 +292,13 @@ async def run(pdf_path: Path, parish_id: str, instruction: str = "") -> list[dic
         system=system_prompt,
         messages=messages,
     )
+    log_ai_tokens(response, task="reader_extract", atimo_team=atimo_team)
 
     raw = response.content[0].text
     announcements = parse_announcements(raw)
     print(f"{len(announcements)} anúncio(s) identificado(s) na extração inicial.")
 
-    announcements = consolidate_multilingual_duplicates(announcements, client)
+    announcements = consolidate_multilingual_duplicates(announcements, client, atimo_team=atimo_team)
 
     term_replacements = _load_term_replacements(parish_id)
     announcements = apply_term_replacements(announcements, term_replacements)

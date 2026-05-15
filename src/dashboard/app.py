@@ -15,8 +15,12 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Streamin
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from dotenv import load_dotenv
+from fastapi.middleware.cors import CORSMiddleware
 
 load_dotenv()
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from log_ai import log_ai_tokens
 
 ROOT = Path(__file__).parent.parent.parent
 OUTPUT_BASE = ROOT / "output"
@@ -24,6 +28,23 @@ CONFIG_BASE = ROOT / "config" / "parishes"
 STATIC_DIR = Path(__file__).parent / "static"
 
 app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://test2.atimo.us",
+        "https://test2.atimo.us",
+        "http://wwb.atimo.us",
+        "https://wwb.atimo.us",
+        "http://localhost:8502",
+        "http://localhost:3000",
+    ],
+    allow_origin_regex=".*",
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 # --- Workflow state ---
@@ -277,7 +298,7 @@ def _run_in_thread(coro_factory):
         loop.close()
 
 
-async def _run_workflow(job_id: str, parish_id: str, mode: str = "complete", reader_instruction: str = "", bulletin_url: str = ""):
+async def _run_workflow(job_id: str, parish_id: str, mode: str = "complete", reader_instruction: str = "", bulletin_url: str = "", atimo_team: bool = False):
     """mode: 'complete' | 'images' | 'content'"""
     job = _workflow_jobs[job_id]
 
@@ -323,8 +344,9 @@ async def _run_workflow(job_id: str, parish_id: str, mode: str = "complete", rea
             step("reader", "Lendo boletim e extraindo informações...")
             import agent2_reader as _a2
             _rinstr = reader_instruction
+            _atimo = atimo_team
             await asyncio.to_thread(
-                _run_in_thread, lambda: _a2.run(pdf_path=pdf_path, parish_id=_pid, instruction=_rinstr)
+                _run_in_thread, lambda: _a2.run(pdf_path=pdf_path, parish_id=_pid, instruction=_rinstr, atimo_team=_atimo)
             )
         else:
             # Usa o run mais recente já existente para a paróquia
@@ -385,17 +407,18 @@ async def _run_workflow(job_id: str, parish_id: str, mode: str = "complete", rea
         _pmode = _get_prompt_mode(parish_id)
         import agent4a_image as _a4a, agent4b_html as _a4b
 
+        _atimo = atimo_team
         if mode == "images":
             step("generation", "Gerando imagens...")
-            await asyncio.to_thread(_run_in_thread, lambda: _a4a.run(output_dir=_odir, parish_id=_pid, prompt_mode=_pmode))
+            await asyncio.to_thread(_run_in_thread, lambda: _a4a.run(output_dir=_odir, parish_id=_pid, prompt_mode=_pmode, atimo_team=_atimo))
         elif mode == "content":
             step("generation", "Gerando conteúdo HTML...")
-            await asyncio.to_thread(_run_in_thread, lambda: _a4b.run(output_dir=_odir, parish_id=_pid))
+            await asyncio.to_thread(_run_in_thread, lambda: _a4b.run(output_dir=_odir, parish_id=_pid, atimo_team=_atimo))
         else:  # complete
             step("generation", "Gerando imagens e conteúdo...")
             await asyncio.gather(
-                asyncio.to_thread(_run_in_thread, lambda: _a4a.run(output_dir=_odir, parish_id=_pid, prompt_mode=_pmode)),
-                asyncio.to_thread(_run_in_thread, lambda: _a4b.run(output_dir=_odir, parish_id=_pid)),
+                asyncio.to_thread(_run_in_thread, lambda: _a4a.run(output_dir=_odir, parish_id=_pid, prompt_mode=_pmode, atimo_team=_atimo)),
+                asyncio.to_thread(_run_in_thread, lambda: _a4b.run(output_dir=_odir, parish_id=_pid, atimo_team=_atimo)),
             )
 
         # Step 5 — reviewer (complete only)
@@ -403,7 +426,7 @@ async def _run_workflow(job_id: str, parish_id: str, mode: str = "complete", rea
             step("reviewer", "Revisando qualidade...")
             import agent5_reviewer as _a5
             await asyncio.to_thread(
-                _run_in_thread, lambda: _a5.run(output_dir=_odir, parish_id=_pid)
+                _run_in_thread, lambda: _a5.run(output_dir=_odir, parish_id=_pid, atimo_team=_atimo)
             )
 
         job["status"] = "done"
@@ -657,6 +680,7 @@ class SuggestCorrectionsRequest(BaseModel):
     html: str
     spelling_errors: list[str]
     html_issues: list[str] = []
+    atimo_team: bool = False
 
 
 @app.post("/api/suggest-corrections/{parish_id}/{date}/{ann_id}")
@@ -695,6 +719,7 @@ async def suggest_corrections(parish_id: str, date: str, ann_id: str, body: Sugg
         system=CORRECTION_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": user_msg}],
     )
+    log_ai_tokens(response, task="suggest_corrections", atimo_team=body.atimo_team)
     raw = response.content[0].text.strip()
     if raw.startswith("```"):
         raw = raw.split("```")[1]
@@ -765,6 +790,7 @@ async def save_feedback(parish_id: str, date: str, ann_id: str, body: FeedbackRe
 class RegenRequest(BaseModel):
     instruction: str = ""
     use_crop: bool = False
+    atimo_team: bool = False
 
 
 @app.post("/api/regen/image/{parish_id}/{date}/{ann_id}")
@@ -832,6 +858,7 @@ async def finalize_run(parish_id: str, date: str):
             model="claude-opus-4-5", max_tokens=800,
             messages=[{"role": "user", "content": prompt}],
         )
+        log_ai_tokens(resp, task="finalize_review", atimo_team=False)
         return resp.content[0].text.strip()
 
     image_feedback = ask("imagens (flyers para redes sociais)")
@@ -888,6 +915,7 @@ class WorkflowStartRequest(BaseModel):
     mode: str = "complete"  # "complete" | "images" | "content"
     reader_instruction: str = ""
     bulletin_url: str = ""
+    atimo_team: bool = False
 
 
 @app.post("/api/workflow/start")
@@ -902,7 +930,7 @@ async def workflow_start(body: WorkflowStartRequest):
         "output_dir": None,
         "date": None,
     }
-    asyncio.create_task(_run_workflow(job_id, body.parish_id, body.mode, body.reader_instruction, body.bulletin_url))
+    asyncio.create_task(_run_workflow(job_id, body.parish_id, body.mode, body.reader_instruction, body.bulletin_url, body.atimo_team))
     return {"job_id": job_id}
 
 

@@ -11,6 +11,10 @@ from google.genai import types
 from PIL import Image
 from dotenv import load_dotenv
 
+import sys
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from log_ai import log_ai_tokens
+
 load_dotenv()
 
 OUTPUT_SIZE = (1080, 1350)
@@ -55,7 +59,7 @@ def encode_image(img_path: Path) -> str:
     return base64.standard_b64encode(img_path.read_bytes()).decode("utf-8")
 
 
-def locate_announcements(client: anthropic.Anthropic, pages_dir: Path, announcements: list[dict]) -> dict:
+def locate_announcements(client: anthropic.Anthropic, pages_dir: Path, announcements: list[dict], atimo_team: bool = False) -> dict:
     """Usa Claude para identificar a região de cada anúncio nas páginas."""
     page_files = sorted(pages_dir.glob("page_*.png"))
     page_nums = [int(f.stem.split("_")[1]) for f in page_files]
@@ -113,6 +117,7 @@ def locate_announcements(client: anthropic.Anthropic, pages_dir: Path, announcem
         max_tokens=1024,
         messages=[{"role": "user", "content": content}],
     )
+    log_ai_tokens(response, task="image_locate", atimo_team=atimo_team)
 
     raw = response.content[0].text.strip()
     if raw.startswith("```"):
@@ -187,7 +192,7 @@ def load_agent_feedback(parish_id: str, feedback_type: str) -> str:
     return "\n".join(lines)
 
 
-def extract_announcement_json(client: anthropic.Anthropic, crop: Image.Image) -> dict:
+def extract_announcement_json(client: anthropic.Anthropic, crop: Image.Image, atimo_team: bool = False) -> dict:
     """Agent 1: Claude Vision reads the crop and extracts structured JSON."""
     buf = io.BytesIO()
     crop.save(buf, format="PNG")
@@ -208,6 +213,7 @@ def extract_announcement_json(client: anthropic.Anthropic, crop: Image.Image) ->
             ],
         }],
     )
+    log_ai_tokens(response, task="image_extract_json", atimo_team=atimo_team)
 
     raw = response.content[0].text.strip()
     if raw.startswith("```"):
@@ -271,7 +277,7 @@ def build_prompt_from_json(data: dict) -> str:
     return prompt
 
 
-def build_prompt_with_claude(client: anthropic.Anthropic, ann_json: dict, crop: Image.Image) -> str:
+def build_prompt_with_claude(client: anthropic.Anthropic, ann_json: dict, crop: Image.Image, atimo_team: bool = False) -> str:
     """Usa Claude para gerar o prompt do Gemini com base no JSON extraído e no recorte visual."""
     buf = io.BytesIO()
     crop.save(buf, format="PNG")
@@ -326,6 +332,7 @@ def build_prompt_with_claude(client: anthropic.Anthropic, ann_json: dict, crop: 
             ],
         }],
     )
+    log_ai_tokens(response, task="image_build_prompt", atimo_team=atimo_team)
     return response.content[0].text.strip()
 
 
@@ -341,7 +348,7 @@ def resize_to_canvas(img: Image.Image, size: tuple) -> Image.Image:
     return resized.crop((x, y, x + cw, y + ch))
 
 
-def generate_image_with_gemini(gemini_client: genai.Client, crop: Image.Image, prompt: str) -> Image.Image | None:
+def generate_image_with_gemini(gemini_client: genai.Client, crop: Image.Image, prompt: str, atimo_team: bool = False) -> Image.Image | None:
     """Image-to-image via Gemini 3.1 Flash Image Preview."""
     buf = io.BytesIO()
     crop.save(buf, format="PNG")
@@ -356,6 +363,8 @@ def generate_image_with_gemini(gemini_client: genai.Client, crop: Image.Image, p
             ],
             config=types.GenerateContentConfig(response_modalities=["IMAGE", "TEXT"]),
         )
+        log_ai_tokens(response, task="image_generate_gemini", atimo_team=atimo_team,
+                      model_hint="gemini-3.1-flash-image-preview")
     except Exception as e:
         print(f"  Gemini API error: {e}")
         return None
@@ -374,7 +383,7 @@ def generate_image_with_gemini(gemini_client: genai.Client, crop: Image.Image, p
     return None
 
 
-async def run(output_dir: Path, parish_id: str, prompt_mode: str = "python") -> dict[str, str]:
+async def run(output_dir: Path, parish_id: str, prompt_mode: str = "python", atimo_team: bool = False) -> dict[str, str]:
     anthropic_client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     gemini_client = genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
 
@@ -383,7 +392,7 @@ async def run(output_dir: Path, parish_id: str, prompt_mode: str = "python") -> 
     pages_dir = output_dir / "pages"
 
     print("Localizando anúncios nas páginas (Claude)...")
-    locations = locate_announcements(anthropic_client, pages_dir, announcements)
+    locations = locate_announcements(anthropic_client, pages_dir, announcements, atimo_team=atimo_team)
 
     # Salva localizações para reutilização em edições individuais
     locations_path = output_dir / "locations.json"
@@ -414,16 +423,16 @@ async def run(output_dir: Path, parish_id: str, prompt_mode: str = "python") -> 
         crop = crop_announcement(pages_dir, location)
 
         print(f"  Extraindo dados da imagem...")
-        ann_json = extract_announcement_json(anthropic_client, crop)
+        ann_json = extract_announcement_json(anthropic_client, crop, atimo_team=atimo_team)
         print(f"  JSON extraído: {ann_json}")
 
         if prompt_mode == "claude":
             print(f"  Gerando prompt via Claude...")
-            prompt = build_prompt_with_claude(anthropic_client, ann_json, crop)
+            prompt = build_prompt_with_claude(anthropic_client, ann_json, crop, atimo_team=atimo_team)
         else:
             prompt = build_prompt_from_json(ann_json)
 
-        generated = generate_image_with_gemini(gemini_client, crop, prompt)
+        generated = generate_image_with_gemini(gemini_client, crop, prompt, atimo_team=atimo_team)
         using_placeholder = False
         if generated is None:
             if placeholder_img:

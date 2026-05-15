@@ -9,6 +9,10 @@ from PIL import Image
 from pyzbar.pyzbar import decode as qr_decode
 from dotenv import load_dotenv
 
+import sys
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from log_ai import log_ai_tokens
+
 load_dotenv()
 
 PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
@@ -111,6 +115,7 @@ async def generate_html_for_announcement(
     system_prompt: str,
     qr_urls: list[str],
     crop_image: "Image.Image | None" = None,
+    atimo_team: bool = False,
 ) -> str:
     user_message = build_user_message(announcement, qr_urls)
 
@@ -151,6 +156,7 @@ async def generate_html_for_announcement(
         system=system_prompt,
         messages=[{"role": "user", "content": content}],
     )
+    log_ai_tokens(response, task="html_generate", atimo_team=atimo_team)
     html = response.content[0].text.strip()
     # Remove possível markdown code block
     if html.startswith("```"):
@@ -161,7 +167,7 @@ async def generate_html_for_announcement(
     return html
 
 
-async def run(output_dir: Path, parish_id: str) -> dict[str, str]:
+async def run(output_dir: Path, parish_id: str, atimo_team: bool = False) -> dict[str, str]:
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     system_prompt = load_system_prompt(parish_id)
 
@@ -178,7 +184,7 @@ async def run(output_dir: Path, parish_id: str) -> dict[str, str]:
         ann_id = ann.get("id", str(ann.get("order", "unknown")))
         print(f"Gerando HTML: [{ann_id}] {ann.get('title', '')}...")
 
-        html = await generate_html_for_announcement(client, ann, system_prompt, qr_urls)
+        html = await generate_html_for_announcement(client, ann, system_prompt, qr_urls, atimo_team=atimo_team)
 
         filename = f"announcement_{ann_id:0>2}.html" if str(ann_id).isdigit() else f"announcement_{ann_id}.html"
         file_path = html_dir / filename
