@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ParishMate — Bulletin Scan Setup</title>
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Noto+Sans:wght@400;500&display=swap" rel="stylesheet" />
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:          #EDEEF2;
+      --surface:     #FFFFFF;
+      --border:      #D1D5DB;
+      --border-hover:#9CA3AF;
+      --text:        #1E293B;
+      --muted:       #64748B;
+      --hint:        #9CA3AF;
+      --primary:     #2563EB;
+      --primary-h:   #1D4ED8;
+      --check-bg:    #EFF6FF;
+      --check-bdr:   #3B82F6;
+      --check-txt:   #1E40AF;
+      --error:       #DC2626;
+      --error-bg:    #FEF2F2;
+      --error-bdr:   #FCA5A5;
+      --success:     #16A34A;
+      --success-bg:  #F0FDF4;
+      --radius:      10px;
+      --font-head:   'Figtree', sans-serif;
+      --font-body:   'Noto Sans', sans-serif;
+    }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+      background: #D6D8DE;
+      font-family: var(--font-body);
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body { padding: 40px; }
+
+    /* ── Two-column shell ── */
+    .layout {
+      display: flex;
+      height: 100%;
+      border-radius: 16px;
+      overflow: hidden;
+      background: var(--bg);
+    }
+
+    /* ── Left panel: fixed dog image ── */
+    .panel-left {
+      flex: 0 0 52%;
+      position: relative;
+      overflow: hidden;
+      background: var(--bg);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .panel-left-header {
+      padding: 80px 0 0;
+      max-width: 460px;
+      width: 100%;
+    }
+    .panel-left-title {
+      font-family: var(--font-head);
+      font-size: 5.5rem;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      color: var(--text);
+      line-height: 1;
+    }
+    .panel-left-subtitle {
+      font-family: var(--font-body);
+      font-size: 0.875rem;
+      color: var(--muted);
+      line-height: 1.6;
+      margin-top: 8px;
+    }
+    .panel-left img {
+      width: 100%;
+      max-width: 680px;
+      flex: 1;
+      min-height: 0;
+      object-fit: contain;
+      object-position: center bottom;
+      display: block;
+    }
+
+    /* ── Right panel: scrollable form ── */
+    .panel-right {
+      flex: 1;
+      height: 80%;
+      overflow-y: auto;
+      overflow-x: hidden;
+      background: var(--bg);
+      padding: 0 48px 0 40px;
+      align-self: center;
+      scroll-behavior: smooth;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(148,163,184,0.5) transparent;
+    }
+    .panel-right::-webkit-scrollbar { width: 8px; }
+    .panel-right::-webkit-scrollbar-track { background: transparent; }
+    .panel-right::-webkit-scrollbar-thumb {
+      background: rgba(148,163,184,0.55);
+      border-radius: 999px;
+      border: 2px solid var(--bg);
+      background-clip: padding-box;
+    }
+    .panel-right::-webkit-scrollbar-thumb:hover {
+      background: rgba(100,116,139,0.75);
+      border: 2px solid var(--bg);
+      background-clip: padding-box;
+    }
+
+    /* ── Form wrapper ── */
+    .form-wrapper { max-width: 560px; }
+
+    .req-star { color: var(--error); }
+
+    /* ── Form layout ── */
+    form { display: flex; flex-direction: column; gap: 28px; padding-bottom: 64px; }
+
+    /* ── Field ── */
+    .field { display: flex; flex-direction: column; gap: 6px; }
+
+    .field label,
+    .field-legend {
+      font-family: var(--font-head);
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: #334155;
+    }
+    .field-legend { display: block; margin-bottom: 2px; }
+
+    .field input[type="text"],
+    .field input[type="number"],
+    .field select,
+    .field textarea {
+      font-family: var(--font-body);
+      font-size: 0.875rem;
+      color: var(--text);
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px 16px;
+      width: 100%;
+      transition: border-color 0.18s, box-shadow 0.18s;
+      outline: none;
+      -webkit-appearance: none;
+    }
+    .field input::placeholder,
+    .field textarea::placeholder { color: var(--hint); }
+
+    .field input[type="number"]::-webkit-inner-spin-button,
+    .field input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+    .field input[type="number"] { -moz-appearance: textfield; }
+
+    .field input:hover,
+    .field select:hover,
+    .field textarea:hover { border-color: var(--border-hover); }
+
+    .field input:focus,
+    .field select:focus,
+    .field textarea:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(37,99,235,0.12);
+    }
+
+    .field input.is-error,
+    .field select.is-error,
+    .field textarea.is-error {
+      border-color: var(--error);
+      box-shadow: 0 0 0 3px rgba(220,38,38,0.10);
+    }
+
+    .field select {
+      appearance: none;
+      -webkit-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394A3B8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      padding-right: 36px;
+      cursor: pointer;
+    }
+    .field select.is-error { border-color: var(--error); box-shadow: 0 0 0 3px rgba(220,38,38,0.10); }
+
+    .field textarea { resize: vertical; min-height: 84px; line-height: 1.6; }
+
+    .hint-text {
+      font-size: 0.75rem;
+      color: var(--hint);
+      line-height: 1.5;
+    }
+    .error-text {
+      font-size: 0.75rem;
+      color: var(--error);
+      line-height: 1.5;
+      display: none;
+    }
+    .error-text.visible { display: block; }
+
+    /* ── First row: total-pages + pages side by side ── */
+    .pages-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 24px;
+    }
+    .pages-row .field-total { flex: 1; }
+    .pages-row.has-pages .field-total { flex: 0 0 auto; }
+    .pages-row .field-total input { width: 100%; }
+    .pages-row.has-pages .field-total input { width: 80px; }
+    .pages-row #pages-field { flex: 1; min-width: 0; }
+
+    /* ── Page checkboxes ── */
+    .page-checkbox-group {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(52px, 1fr));
+      gap: 8px;
+    }
+    .page-checkbox-item { position: relative; }
+    .page-checkbox-item input[type="checkbox"] {
+      position: absolute;
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .page-checkbox-item label {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 44px;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      font-family: var(--font-head);
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: var(--muted);
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s, color 0.15s;
+      user-select: none;
+    }
+    .page-checkbox-item label:hover { border-color: var(--border-hover); color: var(--text); }
+    .page-checkbox-item input:checked + label {
+      border-color: var(--check-bdr);
+      background: var(--check-bg);
+      color: var(--check-txt);
+      font-weight: 600;
+    }
+    .page-checkbox-item input:focus-visible + label {
+      outline: 2px solid var(--primary);
+      outline-offset: 2px;
+    }
+
+    /* ── Content checkboxes ── */
+    .checkbox-group { display: flex; flex-direction: column; gap: 8px; }
+    .checkbox-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+      user-select: none;
+    }
+    .checkbox-item:hover { border-color: var(--border-hover); }
+    .checkbox-item.checked {
+      border-color: var(--check-bdr);
+      background: var(--check-bg);
+    }
+    .checkbox-item input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--primary);
+      cursor: pointer;
+      flex-shrink: 0;
+      margin: 0;
+    }
+    .checkbox-item input:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+    .checkbox-item span {
+      font-family: var(--font-head);
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: var(--text);
+    }
+    .checkbox-item.checked span { color: var(--check-txt); }
+
+    /* ── Divider ── */
+    .divider { border: none; border-top: 1px solid #E2E8F0; }
+
+    /* ── 2-column field row ── */
+    .field-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    @media (max-width: 540px) { .field-row { grid-template-columns: 1fr; } }
+
+    /* ── Select group (day + time) ── */
+    .select-group { display: flex; flex-direction: column; gap: 8px; }
+    .time-group { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+    /* ── Submit ── */
+    .btn-submit {
+      font-family: var(--font-head);
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: #fff;
+      background: var(--primary);
+      border: none;
+      border-radius: var(--radius);
+      padding: 14px 24px;
+      width: 100%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: background 0.18s, transform 0.1s, opacity 0.18s;
+      outline: none;
+    }
+    .btn-submit:hover:not(:disabled) { background: var(--primary-h); }
+    .btn-submit:active:not(:disabled) { transform: scale(0.985); }
+    .btn-submit:focus-visible { box-shadow: 0 0 0 3px rgba(37,99,235,0.3); }
+    .btn-submit:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    .spinner {
+      width: 16px; height: 16px;
+      border: 2px solid rgba(255,255,255,0.35);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Server error ── */
+    .server-error {
+      display: none;
+      font-size: 0.875rem;
+      color: var(--error);
+      background: var(--error-bg);
+      border: 1px solid var(--error-bdr);
+      border-radius: var(--radius);
+      padding: 12px 16px;
+      line-height: 1.5;
+    }
+    .server-error.visible { display: block; }
+    .server-error a { color: var(--error); font-weight: 600; cursor: pointer; }
+
+    /* ── Success screen ── */
+    #success-screen {
+      display: none;
+      text-align: center;
+      padding: 80px 0;
+    }
+    .success-icon {
+      width: 56px; height: 56px;
+      border-radius: 50%;
+      background: var(--success-bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 24px;
+    }
+    #success-screen h2 {
+      font-family: var(--font-head);
+      font-size: 1.375rem;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+    #success-screen p { font-size: 0.875rem; color: var(--muted); margin-bottom: 32px; }
+    .btn-reset {
+      background: none;
+      border: none;
+      font-family: var(--font-head);
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: var(--primary);
+      text-decoration: underline;
+      text-underline-offset: 3px;
+      cursor: pointer;
+    }
+    .btn-reset:hover { color: var(--primary-h); }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { transition: none !important; animation: none !important; }
+    }
+  </style>
+</head>
+<body>
+<div class="layout">
+
+  <!-- Left: title + subtitle + dog image -->
+  <div class="panel-left">
+    <div class="panel-left-header">
+      <h1 class="panel-left-title">Bulletin Scan Setup</h1>
+      <p class="panel-left-subtitle">Define what should be read and processed. Fields marked with <span class="req-star" aria-hidden="true">*</span> are required.</p>
+    </div>
+    <img src="../../../config/layout-dashboard/happy-mate-image.png" alt="ParishMate mascot holding a church bulletin" />
+  </div>
+
+  <!-- Right: scrollable form -->
+  <div class="panel-right" id="form-panel">
+    <div class="form-wrapper">
+
+      <form id="bulletin-form" novalidate>
+
+        <!-- Total pages + conditional page checkboxes -->
+        <div class="pages-row" id="pages-row">
+
+          <div class="field field-total">
+            <label for="total-pages">How many pages does the bulletin have? <span class="req-star" aria-hidden="true">*</span></label>
+            <input
+              type="number"
+              id="total-pages"
+              name="totalPages"
+              placeholder="e.g. 8"
+              min="1"
+              step="1"
+              aria-required="true"
+              autocomplete="off"
+            />
+            <span class="error-text" id="total-pages-error" role="alert">Please enter a number.</span>
+          </div>
+
+          <div class="field" id="pages-field" style="display:none">
+            <span class="field-legend">Which pages should be scanned? <span class="req-star" aria-hidden="true">*</span></span>
+            <div class="page-checkbox-group" id="pages-checkboxes" role="group" aria-label="Pages to scan"></div>
+            <span class="error-text" id="pages-error" role="alert">Please select at least one page.</span>
+          </div>
+
+        </div>
+
+        <!-- Content sections -->
+        <div class="field" id="field-contents">
+          <span class="field-legend">Which content sections should be processed? <span class="req-star" aria-hidden="true">*</span></span>
+          <div class="checkbox-group" role="group">
+            <label class="checkbox-item">
+              <input type="checkbox" name="contents" value="upcoming_events" />
+              <span>Upcoming Events</span>
+            </label>
+            <label class="checkbox-item">
+              <input type="checkbox" name="contents" value="general_announcement" />
+              <span>General Announcement</span>
+            </label>
+            <label class="checkbox-item">
+              <input type="checkbox" name="contents" value="pastor_letter" />
+              <span>Pastor Letter</span>
+            </label>
+            <label class="checkbox-item">
+              <input type="checkbox" name="contents" value="calendar_schedule" />
+              <span>Calendar / Schedule</span>
+            </label>
+            <label class="checkbox-item">
+              <input type="checkbox" name="contents" value="weekly_collection" />
+              <span>Weekly Collection</span>
+            </label>
+          </div>
+          <span class="error-text" id="contents-error" role="alert">Please select at least one section.</span>
+        </div>
+
+        <hr class="divider" />
+
+        <!-- Image instruction -->
+        <div class="field" id="field-image">
+          <label for="image-instruction">Any specific instructions for images? <span style="color:var(--hint);font-weight:400">(optional)</span></label>
+          <textarea
+            id="image-instruction"
+            name="imageInstruction"
+            placeholder="e.g. Focus on event banners and ignore logos..."
+            rows="3"
+          ></textarea>
+          <span class="hint-text">Describe what should be extracted or ignored in the images.</span>
+        </div>
+
+        <!-- Text instruction -->
+        <div class="field" id="field-text">
+          <label for="text-instruction">Any specific instructions for text? <span style="color:var(--hint);font-weight:400">(optional)</span></label>
+          <textarea
+            id="text-instruction"
+            name="textInstruction"
+            placeholder="e.g. Summarize each announcement in 2 lines or less..."
+            rows="3"
+          ></textarea>
+          <span class="hint-text">Describe the tone, format, or filters for text processing.</span>
+        </div>
+
+        <hr class="divider" />
+
+        <!-- Schedule + Publish -->
+        <div class="field-row" id="field-schedule">
+
+          <div class="field">
+            <label>Bulletin Read Time <span class="req-star" aria-hidden="true">*</span></label>
+            <div class="select-group">
+              <select id="scheduled-day" name="scheduledDay" aria-required="true" aria-label="Day of the week — read">
+                <option value="">Day of the week</option>
+                <option value="0">Sunday</option>
+                <option value="1">Monday</option>
+                <option value="2">Tuesday</option>
+                <option value="3">Wednesday</option>
+                <option value="4">Thursday</option>
+                <option value="5">Friday</option>
+                <option value="6">Saturday</option>
+              </select>
+              <div class="time-group">
+                <select id="scheduled-hour" name="scheduledHour" aria-required="true" aria-label="Hour — read">
+                  <option value="">Hour</option>
+                </select>
+                <select id="scheduled-min" name="scheduledMin" aria-required="true" aria-label="Minute — read">
+                  <option value="">Min</option>
+                  <option value="00">00</option>
+                  <option value="15">15</option>
+                  <option value="30">30</option>
+                  <option value="45">45</option>
+                </select>
+              </div>
+            </div>
+            <span class="hint-text">When processing should start.</span>
+            <span class="error-text" id="scheduled-error" role="alert">Please select a day and time.</span>
+          </div>
+
+          <div class="field">
+            <label>Website Publish Time <span class="req-star" aria-hidden="true">*</span></label>
+            <div class="select-group">
+              <select id="publish-day" name="publishDay" aria-required="true" aria-label="Day of the week — publish">
+                <option value="">Day of the week</option>
+                <option value="0">Sunday</option>
+                <option value="1">Monday</option>
+                <option value="2">Tuesday</option>
+                <option value="3">Wednesday</option>
+                <option value="4">Thursday</option>
+                <option value="5">Friday</option>
+                <option value="6">Saturday</option>
+              </select>
+              <div class="time-group">
+                <select id="publish-hour" name="publishHour" aria-required="true" aria-label="Hour — publish">
+                  <option value="">Hour</option>
+                </select>
+                <select id="publish-min" name="publishMin" aria-required="true" aria-label="Minute — publish">
+                  <option value="">Min</option>
+                  <option value="00">00</option>
+                  <option value="15">15</option>
+                  <option value="30">30</option>
+                  <option value="45">45</option>
+                </select>
+              </div>
+            </div>
+            <span class="hint-text">When the bulletin will go live on the site.</span>
+            <span class="error-text" id="publish-error" role="alert">Please select a day and time.</span>
+          </div>
+
+        </div>
+
+        <!-- Server error -->
+        <div class="server-error" id="server-error" role="alert">
+          Failed to save. Check your connection and <a id="retry-btn">try again.</a>
+        </div>
+
+        <!-- Submit -->
+        <button type="submit" class="btn-submit" id="submit-btn">
+          Save settings
+        </button>
+
+      </form>
+
+      <!-- Success -->
+      <div id="success-screen" role="status" aria-live="polite">
+        <div class="success-icon" aria-hidden="true">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#16A34A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+        </div>
+        <h2>Settings saved</h2>
+        <p>The bulletin will be processed as scheduled.</p>
+        <button class="btn-reset" id="reset-btn">Set up another bulletin</button>
+      </div>
+
+    </div>
+  </div><!-- /panel-right -->
+</div><!-- /layout -->
+
+<script>
+$(function () {
+
+  var $panel = $('#form-panel');
+
+  /* ── Smooth scroll to element within right panel ── */
+  function scrollTo($el) {
+    if (!$el || !$el.length) return;
+    var panelTop  = $panel.offset().top;
+    var elTop     = $el.offset().top;
+    var current   = $panel.scrollTop();
+    var target    = current + (elTop - panelTop) - 32;
+    $panel.animate({ scrollTop: target }, 380);
+  }
+
+  /* ── Helpers ── */
+  function showError(inputId, errorId) {
+    $('#' + inputId).addClass('is-error').attr('aria-invalid', 'true');
+    $('#' + errorId).addClass('visible');
+  }
+  function clearError(inputId, errorId) {
+    $('#' + inputId).removeClass('is-error').attr('aria-invalid', 'false');
+    $('#' + errorId).removeClass('visible');
+  }
+  function showContentsError() { $('#contents-error').addClass('visible'); }
+  function clearContentsError() { $('#contents-error').removeClass('visible'); }
+
+  /* ── Hour options (AM/PM) ── */
+  var hourOpts = '';
+  var ampmHours = [
+    { val: '12', label: '12 AM' },
+    { val: '01', label: '1 AM'  }, { val: '02', label: '2 AM'  },
+    { val: '03', label: '3 AM'  }, { val: '04', label: '4 AM'  },
+    { val: '05', label: '5 AM'  }, { val: '06', label: '6 AM'  },
+    { val: '07', label: '7 AM'  }, { val: '08', label: '8 AM'  },
+    { val: '09', label: '9 AM'  }, { val: '10', label: '10 AM' },
+    { val: '11', label: '11 AM' },
+    { val: '00', label: '12 PM' },
+    { val: '13', label: '1 PM'  }, { val: '14', label: '2 PM'  },
+    { val: '15', label: '3 PM'  }, { val: '16', label: '4 PM'  },
+    { val: '17', label: '5 PM'  }, { val: '18', label: '6 PM'  },
+    { val: '19', label: '7 PM'  }, { val: '20', label: '8 PM'  },
+    { val: '21', label: '9 PM'  }, { val: '22', label: '10 PM' },
+    { val: '23', label: '11 PM' },
+  ];
+  $.each(ampmHours, function (_, h) {
+    hourOpts += '<option value="' + h.val + '">' + h.label + '</option>';
+  });
+  $('#scheduled-hour, #publish-hour').append(hourOpts);
+
+  /* ── Page checkboxes ── */
+  function buildPageCheckboxes(total) {
+    var $group = $('#pages-checkboxes').empty();
+    for (var i = 1; i <= total; i++) {
+      var id = 'page-' + i;
+      $group.append(
+        '<div class="page-checkbox-item">' +
+          '<input type="checkbox" id="' + id + '" name="pages" value="' + i + '" />' +
+          '<label for="' + id + '">' + i + '</label>' +
+        '</div>'
+      );
+    }
+    $group.on('change', 'input[type="checkbox"]', function () {
+      if ($('input[name="pages"]:checked').length > 0) {
+        $('#pages-checkboxes .page-checkbox-item label').css('border-color', '');
+        $('#pages-error').removeClass('visible');
+        /* scroll to contents after first page selected */
+        scrollTo($('#field-contents'));
+      }
+    });
+  }
+
+  /* ── total-pages: generate checkboxes + auto-scroll ── */
+  $('#total-pages').on('blur', function () {
+    var v = parseInt($(this).val(), 10);
+    if (!$(this).val().trim() || isNaN(v) || v < 1) showError('total-pages', 'total-pages-error');
+    else clearError('total-pages', 'total-pages-error');
+  });
+
+  $('#total-pages').on('input', function () {
+    var v = parseInt($(this).val(), 10);
+    if ($(this).val().trim() && !isNaN(v) && v >= 1) {
+      clearError('total-pages', 'total-pages-error');
+      buildPageCheckboxes(v);
+      $('#pages-field').show();
+      $('.pages-row').addClass('has-pages');
+      /* scroll so both the input and the new checkboxes are visible */
+      scrollTo($('#pages-row'));
+    } else {
+      $('#pages-field').hide();
+      $('.pages-row').removeClass('has-pages');
+      $('#pages-checkboxes').empty();
+      $('#pages-error').removeClass('visible');
+    }
+  });
+
+  /* ── Contents: auto-scroll to image instruction ── */
+  $('.checkbox-item input[type="checkbox"]').on('change', function () {
+    $(this).closest('.checkbox-item').toggleClass('checked', this.checked);
+    if ($('input[name="contents"]:checked').length > 0) {
+      clearContentsError();
+      scrollTo($('#field-image'));
+    }
+  });
+
+  /* ── Image instruction: auto-scroll to text instruction ── */
+  $('#image-instruction').on('blur', function () {
+    scrollTo($('#field-text'));
+  });
+
+  /* ── Text instruction: auto-scroll to schedule ── */
+  $('#text-instruction').on('blur', function () {
+    scrollTo($('#field-schedule'));
+  });
+
+  /* ── Schedule: auto-scroll to submit when all 6 selects filled ── */
+  function checkScheduleComplete() {
+    if ($('#scheduled-day').val() && $('#scheduled-hour').val() && $('#scheduled-min').val() &&
+        $('#publish-day').val()   && $('#publish-hour').val()   && $('#publish-min').val()) {
+      scrollTo($('#submit-btn'));
+    }
+  }
+
+  /* ── Schedule validation ── */
+  function validateScheduled() {
+    var ok = $('#scheduled-day').val() && $('#scheduled-hour').val() && $('#scheduled-min').val();
+    if (!ok) {
+      $('#scheduled-day, #scheduled-hour, #scheduled-min').addClass('is-error');
+      $('#scheduled-error').addClass('visible');
+      return false;
+    }
+    $('#scheduled-day, #scheduled-hour, #scheduled-min').removeClass('is-error');
+    $('#scheduled-error').removeClass('visible');
+    return true;
+  }
+  function validatePublish() {
+    var ok = $('#publish-day').val() && $('#publish-hour').val() && $('#publish-min').val();
+    if (!ok) {
+      $('#publish-day, #publish-hour, #publish-min').addClass('is-error');
+      $('#publish-error').addClass('visible');
+      return false;
+    }
+    $('#publish-day, #publish-hour, #publish-min').removeClass('is-error');
+    $('#publish-error').removeClass('visible');
+    return true;
+  }
+
+  $('#scheduled-day, #scheduled-hour, #scheduled-min').on('change', function () {
+    if ($('#scheduled-day').val() && $('#scheduled-hour').val() && $('#scheduled-min').val()) {
+      $('#scheduled-day, #scheduled-hour, #scheduled-min').removeClass('is-error');
+      $('#scheduled-error').removeClass('visible');
+    }
+    checkScheduleComplete();
+  });
+  $('#publish-day, #publish-hour, #publish-min').on('change', function () {
+    if ($('#publish-day').val() && $('#publish-hour').val() && $('#publish-min').val()) {
+      $('#publish-day, #publish-hour, #publish-min').removeClass('is-error');
+      $('#publish-error').removeClass('visible');
+    }
+    checkScheduleComplete();
+  });
+
+  /* ── Retry ── */
+  $('#retry-btn').on('click', function () { $('#server-error').removeClass('visible'); });
+
+  /* ── Validate all ── */
+  function validateAll() {
+    var valid = true;
+
+    var tp = parseInt($('#total-pages').val(), 10);
+    if (!$('#total-pages').val().trim() || isNaN(tp) || tp < 1) {
+      showError('total-pages', 'total-pages-error'); valid = false;
+    } else {
+      clearError('total-pages', 'total-pages-error');
+    }
+
+    if ($('#pages-field').is(':visible') && $('input[name="pages"]:checked').length === 0) {
+      $('#pages-checkboxes .page-checkbox-item label').css('border-color', 'var(--error)');
+      $('#pages-error').addClass('visible');
+      valid = false;
+    } else if ($('#pages-field').is(':visible') && $('input[name="pages"]:checked').length > 0) {
+      $('#pages-checkboxes .page-checkbox-item label').css('border-color', '');
+      $('#pages-error').removeClass('visible');
+    }
+
+    if ($('input[name="contents"]:checked').length === 0) {
+      showContentsError(); valid = false;
+    } else {
+      clearContentsError();
+    }
+
+    if (!validateScheduled()) valid = false;
+    if (!validatePublish())   valid = false;
+
+    return valid;
+  }
+
+  /* ── Submit ── */
+  $('#bulletin-form').on('submit', function (e) {
+    e.preventDefault();
+    $('#server-error').removeClass('visible');
+
+    if (!validateAll()) {
+      var $first = $('[aria-invalid="true"], #pages-error.visible, #contents-error.visible').first();
+      if ($first.length) scrollTo($first.closest('.field, .pages-row, .field-row'));
+      return;
+    }
+
+    var $btn = $('#submit-btn');
+    $btn.prop('disabled', true).html('<div class="spinner"></div><span>Saving…</span>');
+
+    setTimeout(function () {
+      var success = true;
+      if (success) {
+        $('#bulletin-form').hide();
+        $('#success-screen').show();
+        $panel.animate({ scrollTop: 0 }, 400);
+      } else {
+        $btn.prop('disabled', false).text('Save settings');
+        $('#server-error').addClass('visible');
+      }
+    }, 1300);
+  });
+
+  /* ── Reset ── */
+  $('#reset-btn').on('click', function () {
+    $('#bulletin-form')[0].reset();
+    $('#pages-field').hide();
+    $('.pages-row').removeClass('has-pages');
+    $('#pages-checkboxes').empty();
+    $('#scheduled-day, #scheduled-hour, #scheduled-min, #publish-day, #publish-hour, #publish-min').val('').removeClass('is-error');
+    $('.checkbox-item').removeClass('checked');
+    $('.is-error').removeClass('is-error');
+    $('.error-text').removeClass('visible');
+    $('#server-error').removeClass('visible');
+    $('#submit-btn').prop('disabled', false).text('Save settings');
+    $('#success-screen').hide();
+    $('#bulletin-form').show();
+    $panel.animate({ scrollTop: 0 }, 300);
+  });
+
+});
+</script>
+</body>
+</html>
